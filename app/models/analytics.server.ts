@@ -10,6 +10,7 @@ interface LineItemRow {
   productTitle: string;
   variantTitle: string | null;
   discountedTotalAmount: number;
+  totalCostAmount: number | null;
   quantity: number;
   bundleGroupId: string | null;
   bundleTitle: string | null;
@@ -38,6 +39,7 @@ async function lineItemsInRange(
       productTitle: true,
       variantTitle: true,
       discountedTotalAmount: true,
+      totalCostAmount: true,
       quantity: true,
       bundleGroupId: true,
       bundleTitle: true,
@@ -50,6 +52,9 @@ export interface PeriodTotals {
   revenue: number;
   orderCount: number;
   averageOrderValue: number;
+  grossProfit: number | null; // null if no line item in range has cost data
+  grossMarginPct: number | null;
+  costDataCoveragePct: number; // % of revenue for which a cost was known — read this before trusting grossProfit
 }
 
 export async function getPeriodTotals(
@@ -60,10 +65,29 @@ export async function getPeriodTotals(
   const revenue = items.reduce((sum: number, li) => sum + li.discountedTotalAmount, 0);
   const orderIds = new Set(items.map((li) => li.orderId));
   const orderCount = orderIds.size;
+
+  let costedRevenue = 0;
+  let totalCost = 0;
+  for (const li of items) {
+    if (li.totalCostAmount !== null) {
+      costedRevenue += li.discountedTotalAmount;
+      totalCost += li.totalCostAmount;
+    }
+  }
+  const costDataCoveragePct = revenue > 0 ? (costedRevenue / revenue) * 100 : 0;
+  // Only report gross profit/margin once we actually have cost data for at
+  // least some line items — otherwise it's not "no profit", it's "unknown".
+  const grossProfit = costedRevenue > 0 ? costedRevenue - totalCost : null;
+  const grossMarginPct =
+    grossProfit !== null && costedRevenue > 0 ? (grossProfit / costedRevenue) * 100 : null;
+
   return {
     revenue,
     orderCount,
     averageOrderValue: orderCount > 0 ? revenue / orderCount : 0,
+    grossProfit,
+    grossMarginPct,
+    costDataCoveragePct,
   };
 }
 
@@ -72,6 +96,7 @@ export interface YoYComparison {
   previous: PeriodTotals;
   revenueChangePct: number | null; // null when previous period had zero revenue
   orderCountChangePct: number | null;
+  grossProfitChangePct: number | null; // null when profit data unavailable for either period
 }
 
 function shiftRangeByOneYear(range: DateRange): DateRange {
@@ -102,6 +127,10 @@ export async function getYoYComparison(
     previous,
     revenueChangePct: pctChange(current.revenue, previous.revenue),
     orderCountChangePct: pctChange(current.orderCount, previous.orderCount),
+    grossProfitChangePct:
+      current.grossProfit !== null && previous.grossProfit !== null
+        ? pctChange(current.grossProfit, previous.grossProfit)
+        : null,
   };
 }
 
@@ -171,6 +200,8 @@ export interface ProductOrBundleRevenue {
   isBundle: boolean;
   revenue: number;
   unitsSold: number;
+  grossProfit: number | null; // null if no cost data known for this item
+  grossMarginPct: number | null;
 }
 
 // Groups line items into products vs. bundles: components sharing the same
@@ -183,7 +214,10 @@ export async function getTopProductsAndBundles(
 ): Promise<ProductOrBundleRevenue[]> {
   const items: LineItemRow[] = await lineItemsInRange(shop, range);
 
-  const grouped = new Map<string, ProductOrBundleRevenue>();
+  const grouped = new Map<
+    string,
+    ProductOrBundleRevenue & { costedRevenue: number; totalCost: number }
+  >();
 
   for (const li of items) {
     const isBundle = Boolean(li.bundleGroupId);
@@ -198,6 +232,10 @@ export async function getTopProductsAndBundles(
     if (existing) {
       existing.revenue += li.discountedTotalAmount;
       existing.unitsSold += li.quantity;
+      if (li.totalCostAmount !== null) {
+        existing.costedRevenue += li.discountedTotalAmount;
+        existing.totalCost += li.totalCostAmount;
+      }
     } else {
       grouped.set(key, {
         key,
@@ -205,11 +243,23 @@ export async function getTopProductsAndBundles(
         isBundle,
         revenue: li.discountedTotalAmount,
         unitsSold: li.quantity,
+        grossProfit: null,
+        grossMarginPct: null,
+        costedRevenue: li.totalCostAmount !== null ? li.discountedTotalAmount : 0,
+        totalCost: li.totalCostAmount ?? 0,
       });
     }
   }
 
   return Array.from(grouped.values())
+    .map((row) => {
+      const grossProfit = row.costedRevenue > 0 ? row.costedRevenue - row.totalCost : null;
+      const grossMarginPct =
+        grossProfit !== null && row.costedRevenue > 0
+          ? (grossProfit / row.costedRevenue) * 100
+          : null;
+      return { ...row, grossProfit, grossMarginPct };
+    })
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, limit);
 }

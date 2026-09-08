@@ -8,10 +8,10 @@ ein Umsatz-Dashboard mit Jahresvergleich und Bundle-Auswertung erweitert.
 - Synchronisiert Bestellungen (Webhooks `orders/create`, `orders/updated`,
   `orders/cancelled`) plus einmaligem historischem Backfill (Bulk-Operations-API,
   Standard: 2 Jahre) in eine eigene Datenbank.
-- Zeigt Umsatzentwicklung, Bestellungen, Ø Bestellwert und Vorjahresvergleich
-  (YoY) für einen wählbaren Zeitraum.
+- Zeigt Umsatzentwicklung, Bestellungen, Ø Bestellwert, **Ertrag (Rohgewinn/Marge)**
+  und Vorjahresvergleich (YoY) für einen wählbaren Zeitraum.
 - Gruppiert Bundle-Komponenten zu einer Zeile pro Bundle statt sie als
-  Einzelprodukte zu zählen.
+  Einzelprodukte zu zählen — inkl. Marge pro Bundle.
 
 ## Warum eine eigene Datenbank statt Live-API-Abfragen?
 
@@ -29,6 +29,18 @@ Umsatzberechnung nötig ist — keine Kundendaten, Adressen o. Ä.).
 - [Shopify CLI](https://shopify.dev/docs/api/shopify-cli) (`npm install -g @shopify/cli`)
 - Ein [Shopify Partner-Account](https://partners.shopify.com/) und eine
   Development Store zum Testen
+- **Eine Postgres-Datenbank für lokale Entwicklung.** Das Schema ist auf
+  Postgres umgestellt (siehe Abschnitt 6). Am einfachsten lokal per Docker:
+  ```bash
+  docker run --name umsatz-analyse-db -e POSTGRES_PASSWORD=postgres \
+    -p 5432:5432 -d postgres:16
+  ```
+  und dann eine `.env`-Datei im Projekt-Root anlegen:
+  ```
+  DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+  ```
+  Alternativ direkt gegen die Render-Datenbank aus Abschnitt 6a entwickeln
+  (External Database URL aus dem Render-Dashboard kopieren).
 - **pnpm empfohlen** (das Template ist als pnpm-Workspace aufgesetzt —
   `pnpm-workspace.yaml` liegt bereits im Projekt). Mit npm funktioniert es
   ebenfalls, kann aber vereinzelt zu doppelt aufgelösten Abhängigkeiten
@@ -97,20 +109,88 @@ Bundle-Zuordnung.
 
 ### 6. Hosting für Produktivbetrieb
 
-Für den Store-Betrieb (nicht nur lokales Testen) braucht die App dauerhaftes
-Hosting mit öffentlicher HTTPS-URL, z. B. Render, Fly.io, Railway oder ein
-eigener Server. Wichtig:
+**Kurzfassung: der schnellste Weg ist jetzt der "Deploy to Render"-Button (Details unten in Abschnitt 6a).** Alternativ funktioniert jede andere Docker-fähige Plattform (Fly.io, Railway, eigener Server) mit dem mitgelieferten `Dockerfile`.
 
-- SQLite (`prisma/schema.prisma`, aktuell `file:dev.sqlite`) eignet sich nur
-  für lokale Entwicklung. Für Produktion auf einen Postgres-Datastore
-  umstellen (`provider = "postgresql"`, `url = env("DATABASE_URL")`) — dafür
-  müsst ihr die Migrationen einmal neu generieren (`npx prisma migrate dev`),
-  da SQLite- und Postgres-SQL nicht identisch sind.
+Grundsätzlich gilt für jede Hosting-Variante:
+
+- Die Datenbank ist bereits auf Postgres umgestellt (`prisma/schema.prisma`,
+  Migration `prisma/migrations/0001_init`) — SQLite kommt nur noch lokal
+  beim allerersten Ausprobieren zum Einsatz, falls ihr das selbst so
+  einrichtet.
 - `SHOPIFY_APP_URL` und die Redirect-/Webhook-URLs müssen auf die
-  öffentliche Domain zeigen (`shopify app deploy` aktualisiert das).
+  öffentliche Domain zeigen (`shopify app deploy` aktualisiert das im
+  Partner-Dashboard).
 - Der Scope `read_all_orders` erfordert für öffentliche Apps im App Store
   eine Begründung im Review-Prozess; für eine private/Custom-App (nur für
   euren eigenen Store) reicht die einmalige Zustimmung bei der Installation.
+
+### 6a. Ein-Klick-Deploy über Render
+
+Die Datei `render.yaml` im Projekt-Root ist ein sogenanntes "Render
+Blueprint" — es definiert Web-Service *und* Postgres-Datenbank in einem
+Rutsch, inklusive automatisch verknüpfter `DATABASE_URL`.
+
+**Wichtig zur Erwartungshaltung:** Auch das ist kein "ZIP hochladen und
+fertig" — Render deployt aus einem Git-Repository, nicht aus einer
+Zip-Datei. Der Ablauf ist aber danach wirklich nur noch wenige Klicks:
+
+1. **Einmalig:** Projekt in ein eigenes (privates) GitHub-Repository
+   pushen, z. B.:
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   gh repo create umsatz-analyse-app --private --source=. --push
+   # oder ohne GitHub CLI: manuell ein leeres Repo auf github.com anlegen
+   # und die von GitHub angezeigten Befehle ausführen
+   ```
+2. Auf [render.com](https://render.com) einloggen/registrieren →
+   **New +** → **Blueprint** → das gerade erstellte Repo auswählen.
+   Render erkennt `render.yaml` automatisch und zeigt an, was angelegt wird
+   (1 Web-Service + 1 Postgres-Datenbank).
+3. **Deploy** klicken. Render baut das `Dockerfile`, legt die Datenbank an
+   und verbindet beides automatisch über `DATABASE_URL`.
+4. Nach dem ersten (fehlschlagenden) Deploy zeigt Render die vergebene
+   URL, z. B. `https://umsatz-analyse-app.onrender.com`. Diese URL:
+   - im Render-Dashboard unter dem Web-Service → **Environment** als
+     `SHOPIFY_APP_URL` eintragen
+   - zusätzlich dort `SHOPIFY_API_KEY` und `SHOPIFY_API_SECRET` aus dem
+     Partner-Dashboard eintragen (diese drei Werte lässt `render.yaml`
+     bewusst leer, damit keine Geheimnisse im Git-Repo landen)
+5. Lokal `shopify.app.toml` → `application_url` bzw. per
+   ```bash
+   shopify app config link
+   shopify app deploy
+   ```
+   auf dieselbe Render-URL zeigen lassen, damit Shopify Redirect- und
+   Webhook-URLs kennt.
+6. In Render **Manual Deploy → Deploy latest commit** erneut anstoßen,
+   damit die App mit den jetzt gesetzten Umgebungsvariablen neu startet.
+7. Ab hier läuft die App dauerhaft — jeder weitere `git push` auf den
+   verbundenen Branch löst automatisch einen neuen Deploy aus.
+
+<!-- Sobald das Repo öffentlich auf GitHub liegt, funktioniert auch der
+     offizielle Render-Button für einen Klick-Deploy-Link:
+     [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+     Für ein privates Repo (empfohlen, da hier eure Store-Zugangsdaten
+     landen) ist der manuelle "New + → Blueprint"-Weg oben der richtige. -->
+
+> **Kostenhinweis:** `render.yaml` ist bewusst auf den bezahlten
+> "starter"-Tarif für Web-Service *und* Datenbank voreingestellt (zusammen
+> ca. 14 $/Monat). Der kostenlose Tarif pausiert Web-Services nach 15
+> Minuten Inaktivität und lässt die Datenbank nach 30 Tagen ablaufen — für
+> zuverlässige Webhook-Verarbeitung (Bestellsynchronisation) ungeeignet. Zum
+> unverbindlichen ersten Ausprobieren kann in `render.yaml` trotzdem
+> `plan: free` eingetragen werden, sollte vor Produktivbetrieb aber
+> umgestellt werden.
+
+### 6b. Alternative: Fly.io / Railway / eigener Server
+
+Funktioniert genauso über das mitgelieferte `Dockerfile`, nur ohne die
+automatische Datenbank-Verknüpfung aus `render.yaml` — dort muss
+`DATABASE_URL` manuell auf eine selbst angelegte Postgres-Instanz zeigen
+(z. B. Fly Postgres via `fly postgres create`, oder eine externe
+Postgres-Instanz wie Neon/Supabase).
 
 ## Projektstruktur (Ergänzungen zum Standard-Template)
 
@@ -140,6 +220,16 @@ prisma/schema.prisma          + Order, OrderLineItem, SyncState
 - Multi-Currency-Shops: Beträge werden aktuell in `shopMoney` (Shop-Währung)
   aggregiert; bei mehreren Verkaufswährungen ggf. `presentmentMoney` +
   Umrechnung ergänzen.
-- Keine Kosten-/Marge-Daten (nur Umsatz, kein "Ertrag" im Sinne von Deckungsbeitrag) —
-  dafür bräuchtet ihr zusätzlich Einkaufspreise/COGS, die Shopify selbst nicht
-  vorhält (z. B. über `InventoryItem.unitCost`, falls gepflegt).
+- **Ertrag/Marge basiert auf `InventoryItem.unitCost`** ("Cost per item" in
+  Shopify). Das ist nur so gut wie die dort gepflegten Daten:
+  - Fehlt der Wert bei einer Variante, wird die Zeile bei der Margenberechnung
+    ausgeklammert (nicht als 0 gewertet) — das Dashboard zeigt dann an, wie
+    viel Prozent des Umsatzes überhaupt Kostendaten haben ("nur X% mit
+    Kostendaten"). Bei niedriger Abdeckung ist der Ertragswert nur ein grober
+    Anhaltspunkt.
+  - Der Zugriff auf `unitCost` erfordert den Scope `read_inventory` **und**
+    dass "View product costs" für die App/den User in den Shopify-Staff-
+    Berechtigungen aktiviert ist — sonst liefert das Feld `null`.
+  - Es ist ein reiner Rohgewinn (Verkaufspreis − Einkaufspreis), keine volle
+    Deckungsbeitragsrechnung: Versand-, Verpackungs-, Marketing- oder
+    Zahlungskosten sind nicht enthalten.

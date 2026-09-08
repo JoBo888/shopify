@@ -26,6 +26,8 @@ export interface NormalizedLineItem {
   quantity: number;
   originalTotalAmount: number;
   discountedTotalAmount: number;
+  unitCostAmount: number | null;
+  totalCostAmount: number | null;
   bundleGroupId: string | null;
   bundleTitle: string | null;
 }
@@ -38,6 +40,17 @@ export function normalizeOrderNode(shop: string, node: any): NormalizedOrder {
   const lineItems: NormalizedLineItem[] = lineItemEdges.map((edge) => {
     const li = edge.node;
     const bundle = extractBundleInfo(li);
+    const quantity = li.quantity ?? 0;
+    // unitCost is only present if the app/user has "View product costs"
+    // permission and the merchant has set a "Cost per item" on the variant.
+    // Absent in either case -> null, and margin figures downstream treat
+    // that line's cost as unknown rather than zero.
+    const unitCostRaw = li.variant?.inventoryItem?.unitCost?.amount;
+    const unitCostAmount =
+      unitCostRaw !== undefined && unitCostRaw !== null
+        ? Number(unitCostRaw)
+        : null;
+
     return {
       id: li.id,
       productId: li.variant?.product?.id ?? null,
@@ -45,13 +58,15 @@ export function normalizeOrderNode(shop: string, node: any): NormalizedOrder {
       productTitle: li.title,
       variantTitle: li.variant?.title ?? null,
       sku: li.sku ?? null,
-      quantity: li.quantity ?? 0,
+      quantity,
       originalTotalAmount: Number(
         li.originalTotalSet?.shopMoney?.amount ?? 0,
       ),
       discountedTotalAmount: Number(
         li.discountedTotalSet?.shopMoney?.amount ?? 0,
       ),
+      unitCostAmount,
+      totalCostAmount: unitCostAmount !== null ? unitCostAmount * quantity : null,
       bundleGroupId: bundle.bundleGroupId,
       bundleTitle: bundle.bundleTitle,
     };
@@ -114,6 +129,8 @@ export async function upsertOrder(order: NormalizedOrder): Promise<void> {
           quantity: li.quantity,
           originalTotalAmount: li.originalTotalAmount,
           discountedTotalAmount: li.discountedTotalAmount,
+          unitCostAmount: li.unitCostAmount,
+          totalCostAmount: li.totalCostAmount,
           bundleGroupId: li.bundleGroupId,
           bundleTitle: li.bundleTitle,
         })),

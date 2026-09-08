@@ -176,6 +176,9 @@ export default function Index() {
     item.isBundle ? <Badge tone="info">Bundle</Badge> : <Badge>Einzelprodukt</Badge>,
     String(item.unitsSold),
     formatMoney(item.revenue, currency),
+    item.grossProfit !== null
+      ? `${formatMoney(item.grossProfit, currency)} (${item.grossMarginPct?.toFixed(0)}%)`
+      : "—",
   ]);
 
   return (
@@ -204,7 +207,7 @@ export default function Index() {
 
         <Layout>
           <Layout.Section>
-            <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
+            <InlineGrid columns={{ xs: 1, sm: 2, md: 3, lg: 5 }} gap="400">
               <Card>
                 <BlockStack gap="200">
                   <Text as="span" variant="bodySm" tone="subdued">
@@ -229,6 +232,45 @@ export default function Index() {
                   <Badge tone={yoy.orderCountChangePct !== null && yoy.orderCountChangePct >= 0 ? "success" : "critical"}>
                     {`${formatPct(yoy.orderCountChangePct)} ggü. Vorjahr`}
                   </Badge>
+                </BlockStack>
+              </Card>
+              <Card>
+                <BlockStack gap="200">
+                  <Text as="span" variant="bodySm" tone="subdued">
+                    Ertrag (Rohgewinn)
+                  </Text>
+                  {yoy.current.grossProfit !== null ? (
+                    <>
+                      <Text as="p" variant="headingLg">
+                        {formatMoney(yoy.current.grossProfit, currency)}
+                      </Text>
+                      <InlineStack gap="200">
+                        <Badge
+                          tone={
+                            yoy.grossProfitChangePct !== null && yoy.grossProfitChangePct >= 0
+                              ? "success"
+                              : "critical"
+                          }
+                        >
+                          {`${formatPct(yoy.grossProfitChangePct)} ggü. Vorjahr`}
+                        </Badge>
+                        {yoy.current.costDataCoveragePct < 95 && (
+                          <Badge tone="attention">
+                            {`nur ${yoy.current.costDataCoveragePct.toFixed(0)}% mit Kostendaten`}
+                          </Badge>
+                        )}
+                      </InlineStack>
+                    </>
+                  ) : (
+                    <>
+                      <Text as="p" variant="headingLg" tone="subdued">
+                        —
+                      </Text>
+                      <Text as="span" variant="bodySm" tone="subdued">
+                        Kein "Cost per item" in Shopify hinterlegt
+                      </Text>
+                    </>
+                  )}
                 </BlockStack>
               </Card>
               <Card>
@@ -297,8 +339,8 @@ export default function Index() {
                   </Text>
                 ) : (
                   <DataTable
-                    columnContentTypes={["text", "text", "numeric", "numeric"]}
-                    headings={["Produkt / Bundle", "Typ", "Verkaufte Einheiten", "Umsatz"]}
+                    columnContentTypes={["text", "text", "numeric", "numeric", "numeric"]}
+                    headings={["Produkt / Bundle", "Typ", "Verkaufte Einheiten", "Umsatz", "Ertrag (Marge)"]}
                     rows={productRows}
                   />
                 )}

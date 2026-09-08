@@ -36,6 +36,7 @@ services:
                   # Aufruf im Shopify-iframe hängt bei "Cold Start". "starter"
                   # kostet aktuell ca. 7 $/Monat und bleibt dauerhaft aktiv.
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /app
     envVars:
       - key: DATABASE_URL
         fromDatabase:

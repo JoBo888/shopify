@@ -17,6 +17,9 @@ export const ORDER_LINE_ITEM_FIELDS = /* GraphQL */ `
     id
     title
     product { id }
+    inventoryItem {
+      unitCost { amount }
+    }
   }
   lineItemGroup {
     id

@@ -9,8 +9,8 @@ generator client {
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // One row per synced Shopify order. Populated by webhooks (orders/create,
@@ -54,6 +54,8 @@ model OrderLineItem {
   quantity               Int
   originalTotalAmount    Float // list price * quantity, before discounts
   discountedTotalAmount  Float // actual net revenue attributed to this line
+  unitCostAmount         Float? // InventoryItem.unitCost at time of sync, null if not set/visible
+  totalCostAmount        Float? // unitCostAmount * quantity, null if unitCostAmount unknown
   bundleGroupId          String? // LineItemGroup id if part of a bundle, else null
   bundleTitle            String? // parent bundle product title, if applicable
 
