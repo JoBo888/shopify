@@ -1,0 +1,95 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+// One row per synced Shopify order. Populated by webhooks (orders/create,
+// orders/updated, orders/cancelled) and by the initial bulk-operation backfill
+// (see app/models/bulkSync.server.ts) so that revenue/YoY queries never have
+// to hit the Admin API's rate limits at request time.
+model Order {
+  id                    String          @id // Shopify GID, e.g. gid://shopify/Order/123
+  shop                  String
+  name                  String // human order number, e.g. #1001
+  createdAt             DateTime
+  cancelledAt           DateTime?
+  currencyCode          String
+  totalPriceAmount      Float
+  totalDiscountsAmount  Float
+  test                  Boolean         @default(false)
+  updatedAt             DateTime        @default(now())
+  lineItems             OrderLineItem[]
+
+  @@index([shop, createdAt])
+  @@index([shop, cancelledAt])
+}
+
+// One row per order line item. `bundleGroupId` links sibling line items that
+// belong to the same bundle (Shopify's native LineItemGroup mechanism, which
+// the Shopify Bundles app and most cart-transform-based bundle apps use).
+//
+// IMPORTANT: verify with your bundle app (PickyStory) whether it relies on
+// this mechanism or on its own product tags / line item properties instead —
+// see app/models/bundleDetection.server.ts for the single place to adapt this.
+model OrderLineItem {
+  id                     String   @id // Shopify GID of the line item
+  order                  Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId                String
+  shop                   String
+  productId              String? // Shopify GID, null for custom/deleted line items
+  variantId              String?
+  productTitle           String
+  variantTitle           String?
+  sku                    String?
+  quantity               Int
+  originalTotalAmount    Float // list price * quantity, before discounts
+  discountedTotalAmount  Float // actual net revenue attributed to this line
+  bundleGroupId          String? // LineItemGroup id if part of a bundle, else null
+  bundleTitle            String? // parent bundle product title, if applicable
+
+  @@index([shop, productId])
+  @@index([shop, bundleGroupId])
+  @@index([orderId])
+}
+
+// Tracks the one-time historical backfill per shop via Admin API bulk operations,
+// and the watermark for incremental sync.
+model SyncState {
+  shop                  String   @id
+  backfillStatus        String   @default("pending") // pending | running | completed | failed
+  backfillBulkOpId      String?
+  backfillRequestedAt   DateTime?
+  backfillCompletedAt   DateTime?
+  lastWebhookSyncAt     DateTime?
+  errorMessage          String?
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
