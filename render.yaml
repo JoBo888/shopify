@@ -1,0 +1,62 @@
+# Render "Blueprint" — definiert Web-Service + Postgres-Datenbank in einem
+# Rutsch. Sobald dieses Repo (oder ein Fork davon) mit einem Render-Account
+# verbunden ist, erkennt Render diese Datei automatisch und bietet den
+# "Deploy to Render"-Button an (siehe README, Abschnitt "Ein-Klick-Deploy").
+#
+# Was hier passiert:
+#   1. Render legt eine verwaltete Postgres-Instanz an (Tarif "free" zum
+#      Testen, für Produktivbetrieb siehe Hinweis unten).
+#   2. Render baut das Dockerfile im Repo-Root und startet den Container.
+#   3. DATABASE_URL wird automatisch aus der angelegten Postgres-Instanz in
+#      den Web-Service injiziert — kein manuelles Kopieren eines
+#      Connection-Strings nötig.
+#   4. SHOPIFY_API_KEY / SHOPIFY_API_SECRET / SHOPIFY_APP_URL müssen einmalig
+#      manuell im Render-Dashboard gesetzt werden (siehe README) — diese
+#      Werte kennt nur ihr, sie stehen im Shopify Partner-Dashboard.
+#   5. Beim Container-Start führt "npm run docker-start" automatisch
+#      "prisma migrate deploy" aus — die Datenbanktabellen werden also beim
+#      allerersten Deploy automatisch angelegt.
+
+databases:
+  - name: umsatz-analyse-db
+    plan: starter # NICHT "free": das kostenlose Postgres läuft nach 30 Tagen ab
+                  # und würde die App unbrauchbar machen. "starter" kostet aktuell
+                  # ca. 7 $/Monat. Zum unverbindlichen Ausprobieren kann "free"
+                  # eingetragen werden — dann aber vor Produktivbetrieb umstellen.
+    databaseName: umsatz_analyse
+    user: umsatz_analyse
+
+services:
+  - type: web
+    name: umsatz-analyse-app
+    runtime: docker
+    plan: starter # NICHT "free": kostenlose Web-Services pausieren nach 15 Min.
+                  # Inaktivität — dann verpasst die App Webhooks (Bestellungen
+                  # werden nicht mehr synchronisiert) und der Admin-Dashboard-
+                  # Aufruf im Shopify-iframe hängt bei "Cold Start". "starter"
+                  # kostet aktuell ca. 7 $/Monat und bleibt dauerhaft aktiv.
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: umsatz-analyse-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: SCOPES
+        value: read_orders,read_all_orders,read_products,read_inventory
+      # Diese drei Werte NICHT hier eintragen (Datei landet im Git-Repo).
+      # Stattdessen einmalig im Render-Dashboard unter
+      # "umsatz-analyse-app" → "Environment" setzen:
+      #   SHOPIFY_API_KEY      (Partner-Dashboard → App-Einstellungen)
+      #   SHOPIFY_API_SECRET   (Partner-Dashboard → App-Einstellungen)
+      #   SHOPIFY_APP_URL      (die Render-URL, z. B. https://umsatz-analyse-app.onrender.com
+      #                         — Render zeigt sie nach dem ersten Deploy an;
+      #                         danach hier eintragen und "Manual Deploy" erneut
+      #                         anstoßen, damit die App sie kennt)
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      - key: SHOPIFY_APP_URL
+        sync: false
