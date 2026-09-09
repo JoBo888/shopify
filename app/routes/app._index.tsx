@@ -276,9 +276,7 @@ export default function Index() {
     String(item.unitsSold),
     String(item.orderCount),
     formatMoney(item.revenue, currency),
-    item.grossProfit !== null
-      ? `${formatMoney(item.grossProfit, currency)} (${item.grossMarginPct?.toFixed(0)}%)`
-      : "—",
+    formatMoney(item.grossProfit, currency) + ` (${item.grossMarginPct.toFixed(0)}%)`,
   ]);
 
   return (
@@ -536,28 +534,17 @@ export default function Index() {
               <Card>
                 <BlockStack gap="200">
                   <Text as="span" variant="bodySm" tone="subdued">Ertrag (Rohgewinn)</Text>
-                  {comparison.current.grossProfit !== null ? (
-                    <>
-                      <Text as="p" variant="headingLg">
-                        {formatMoney(comparison.current.grossProfit, currency)}
-                      </Text>
-                      <InlineStack gap="200">
-                        <Badge tone={comparison.grossProfitChangePct !== null && comparison.grossProfitChangePct >= 0 ? "success" : "critical"}>
-                          {`${formatPct(comparison.grossProfitChangePct)} ggü. ${comparison.previousLabel}`}
-                        </Badge>
-                        {comparison.current.costDataCoveragePct < 95 && (
-                          <Badge tone="attention">
-                            {`nur ${comparison.current.costDataCoveragePct.toFixed(0)}% mit Kostendaten`}
-                          </Badge>
-                        )}
-                      </InlineStack>
-                    </>
-                  ) : (
-                    <>
-                      <Text as="p" variant="headingLg" tone="subdued">—</Text>
-                      <Text as="span" variant="bodySm" tone="subdued">Kein "Cost per item" in Shopify hinterlegt</Text>
-                    </>
-                  )}
+                  <Text as="p" variant="headingLg">
+                    {formatMoney(comparison.current.grossProfit, currency)}
+                  </Text>
+                  <InlineStack gap="200">
+                    <Badge tone={comparison.grossProfitChangePct !== null && comparison.grossProfitChangePct >= 0 ? "success" : "critical"}>
+                      {`${formatPct(comparison.grossProfitChangePct)} ggü. ${comparison.previousLabel}`}
+                    </Badge>
+                    <Badge tone="info">
+                      {`kalkuliert, 36% Materialeinsatz angesetzt`}
+                    </Badge>
+                  </InlineStack>
                 </BlockStack>
               </Card>
               <Card>

@@ -92,6 +92,20 @@ sie tauchen dann nicht in den Länder-/Kanalfiltern auf. Einmalig beheben:
 - **Nachsync nötig**, damit `productTags` für bestehende Bestellungen
   nachgetragen wird.
 
+## Neu: Rohgewinn pauschal mit 36% Materialeinsatz kalkuliert
+
+- **Der Rohgewinn wird jetzt IMMER als `Umsatz × 64%` berechnet** (36%
+  angenommener Materialeinsatz) — auf allen Ebenen (Kachel oben, Top
+  Produkte & Bundles-Tabelle).
+- **Echte hinterlegte "Cost per item"-Daten aus Shopify werden für diese
+  Kennzahl bewusst NICHT mehr verwendet** (auf expliziten Wunsch). Das
+  bisherige "nur X% mit Kostendaten"-Badge ist deshalb weg — es gibt jetzt
+  immer einen Wert, weil er nicht mehr von hinterlegten Kosten abhängt.
+- Der Prozentsatz ist fest im Code hinterlegt
+  (`ASSUMED_MATERIAL_COST_RATIO` in `app/models/analytics.server.ts`) —
+  falls sich das mal ändern soll, sag Bescheid, dann bau ich ein Eingabefeld
+  in der App dafür.
+
 ## Was diese App macht
 
 - Synchronisiert Bestellungen (Webhooks `orders/create`, `orders/updated`,
