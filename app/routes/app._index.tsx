@@ -305,29 +305,32 @@ export default function Index() {
 
         {/* ---- Zeitraum & Filter ---- */}
         <Card>
-          <BlockStack gap="400">
-            <InlineStack align="space-between" blockAlign="center">
-              <Text as="h2" variant="headingMd">
-                Zeitraum &amp; Filter
-              </Text>
-              <InlineStack gap="200">
-                <Button size="slim" onClick={() => applyPreset(30)}>30 Tage</Button>
-                <Button size="slim" onClick={() => applyPreset(90)}>90 Tage</Button>
-                <Button size="slim" onClick={() => applyPreset(365)}>12 Monate</Button>
-                <Button
-                  size="slim"
-                  disclosure={filtersOpen ? "up" : "down"}
-                  onClick={() => setFiltersOpen((v) => !v)}
-                >
-                  {activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter"}
-                </Button>
+          <Form
+            method="get"
+            onSubmit={() => setFiltersOpen(false)}
+          >
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <Text as="h2" variant="headingMd">
+                  Zeitraum &amp; Filter
+                </Text>
+                <InlineStack gap="200">
+                  <Button size="slim" onClick={() => applyPreset(30)}>30 Tage</Button>
+                  <Button size="slim" onClick={() => applyPreset(90)}>90 Tage</Button>
+                  <Button size="slim" onClick={() => applyPreset(365)}>12 Monate</Button>
+                  <Button
+                    size="slim"
+                    disclosure={filtersOpen ? "up" : "down"}
+                    onClick={() => setFiltersOpen((v) => !v)}
+                  >
+                    {activeFilterCount > 0 ? `Filter (${activeFilterCount})` : "Filter"}
+                  </Button>
+                  <Button size="slim" variant="primary" submit>
+                    Anwenden
+                  </Button>
+                </InlineStack>
               </InlineStack>
-            </InlineStack>
 
-            <Form
-              method="get"
-              onSubmit={() => setFiltersOpen(false)}
-            >
               <BlockStack gap="400">
                 <InlineStack gap="400" wrap>
                   <Box minWidth="160px">
@@ -488,8 +491,8 @@ export default function Index() {
                   </Button>
                 </InlineStack>
               </BlockStack>
-            </Form>
-          </BlockStack>
+            </BlockStack>
+          </Form>
         </Card>
 
         {activeFilterCount > 0 && (
