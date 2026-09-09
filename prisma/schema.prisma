@@ -64,6 +64,7 @@ model OrderLineItem {
   bundleGroupId          String? // LineItemGroup id if part of a bundle, else null
   bundleTitle            String? // parent bundle product title, AS SHOWN AT ORDER TIME (locale-dependent — do not use for grouping across orders)
   bundleProductId        String? // LineItemGroup.productId — stable, locale-independent bundle identity. Null for pre-migration rows or PickyStory-fallback bundles without a resolvable product.
+  productTags            String[] @default([]) // Product.tags at sync time (denormalized per line, since there's no separate Product table)
 
   @@index([shop, productId])
   @@index([shop, bundleGroupId])

@@ -34,6 +34,7 @@ export interface NormalizedLineItem {
   bundleGroupId: string | null;
   bundleTitle: string | null;
   bundleProductId: string | null;
+  productTags: string[];
 }
 
 // Converts a single GraphQL `order` node (from ORDER_BY_ID_QUERY, or a
@@ -80,6 +81,7 @@ export function normalizeOrderNode(shop: string, node: any): NormalizedOrder {
       bundleGroupId: bundle.bundleGroupId,
       bundleTitle: bundle.bundleTitle,
       bundleProductId: bundle.bundleProductId,
+      productTags: Array.isArray(li.variant?.product?.tags) ? li.variant.product.tags : [],
     };
   });
 
@@ -154,6 +156,7 @@ export async function upsertOrder(order: NormalizedOrder): Promise<void> {
           bundleGroupId: li.bundleGroupId,
           bundleTitle: li.bundleTitle,
           bundleProductId: li.bundleProductId,
+          productTags: li.productTags,
         })),
       });
     }

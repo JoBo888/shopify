@@ -78,6 +78,20 @@ sie tauchen dann nicht in den Länder-/Kanalfiltern auf. Einmalig beheben:
 - Braucht ebenfalls einen einmaligen Nachsync ("Daten neu synchronisieren"),
   damit `tags` für bestehende Bestellungen nachgetragen wird.
 
+## Neu: Filter nach Produkt-Tags (zusätzlich zu Bestellungs-Tags)
+
+- Fünfte Filter-Spalte "Produkt-Tags" — das sind die Tags, die ihr am
+  **Artikel selbst** in Shopify hinterlegt (Admin > Produkte > Tags, z.B.
+  "EMS", "groessenfinder-weste"). Andere Sache als die "Bestellungs-Tags"
+  (die auf der Bestellung selbst sitzen, z.B. manuell vergeben oder von
+  Apps gesetzt).
+- Filtert auf **Zeilenebene**: nur Line-Items, deren Produkt einen der
+  ausgewählten Tags trägt, fließen in Umsatz/Ertrag/Zeitverlauf ein — bei
+  Bundles zählt der Tag der einzelnen Bundle-Komponente, nicht des
+  Bundle-Produkts selbst.
+- **Nachsync nötig**, damit `productTags` für bestehende Bestellungen
+  nachgetragen wird.
+
 ## Was diese App macht
 
 - Synchronisiert Bestellungen (Webhooks `orders/create`, `orders/updated`,

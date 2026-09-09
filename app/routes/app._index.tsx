@@ -38,6 +38,7 @@ import {
   getAvailableChannels,
   getAvailableBundles,
   getAvailableTags,
+  getAvailableProductTags,
   resolveBundleFilterTitles,
   type Filters,
   type DateRange,
@@ -139,12 +140,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     channels: params.getAll("channel"),
     bundleTitles: resolvedBundleTitles,
     tags: params.getAll("tag"),
+    productTags: params.getAll("productTag"),
   };
 
   const daySpanMs = range.to.getTime() - range.from.getTime();
   const granularity = daySpanMs > 1000 * 60 * 60 * 24 * 120 ? ("month" as const) : ("day" as const);
 
-  const [comparison, timeSeriesData, topItems, bundleSplit, availableCountries, availableChannels, availableBundles, availableTags] =
+  const [comparison, timeSeriesData, topItems, bundleSplit, availableCountries, availableChannels, availableBundles, availableTags, availableProductTags] =
     await Promise.all([
       getPeriodComparison(shop, range, filters, compareRange),
       getRevenueTimeSeriesWithComparison(shop, range, granularity, filters, compareRange),
@@ -154,6 +156,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       getAvailableChannels(shop),
       getAvailableBundles(shop),
       getAvailableTags(shop),
+      getAvailableProductTags(shop),
     ]);
 
   return {
@@ -174,6 +177,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     availableChannels,
     availableBundles,
     availableTags,
+    availableProductTags,
   };
 };
 
@@ -263,7 +267,8 @@ export default function Index() {
     (filters.countries?.length ?? 0) +
     (filters.channels?.length ?? 0) +
     (selectedBundleKeys?.length ?? 0) +
-    (filters.tags?.length ?? 0);
+    (filters.tags?.length ?? 0) +
+    (filters.productTags?.length ?? 0);
 
   const productRows = topItems.map((item) => [
     item.title,
@@ -374,7 +379,7 @@ export default function Index() {
                 )}
 
                 <Collapsible open={filtersOpen} id="filters-collapsible">
-                  <InlineGrid columns={{ xs: 1, md: 4 }} gap="400">
+                  <InlineGrid columns={{ xs: 1, md: 5 }} gap="400">
                     <BlockStack gap="200">
                       <Text as="h3" variant="headingSm">Zielländer</Text>
                       {data.availableCountries.length === 0 && (
@@ -416,7 +421,7 @@ export default function Index() {
                     </BlockStack>
 
                     <BlockStack gap="200">
-                      <Text as="h3" variant="headingSm">Tags</Text>
+                      <Text as="h3" variant="headingSm">Bestellungs-Tags</Text>
                       {data.availableTags.length === 0 && (
                         <Text as="p" tone="subdued" variant="bodySm">
                           Keine Bestellungs-Tags erfasst.
@@ -429,6 +434,26 @@ export default function Index() {
                             name="tag"
                             value={tag}
                             defaultChecked={filters.tags?.includes(tag)}
+                          />
+                          <Text as="span" variant="bodyMd">{tag}</Text>
+                        </label>
+                      ))}
+                    </BlockStack>
+
+                    <BlockStack gap="200">
+                      <Text as="h3" variant="headingSm">Produkt-Tags</Text>
+                      {data.availableProductTags.length === 0 && (
+                        <Text as="p" tone="subdued" variant="bodySm">
+                          Keine Produkt-Tags erfasst.
+                        </Text>
+                      )}
+                      {data.availableProductTags.map((tag) => (
+                        <label key={tag} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            name="productTag"
+                            value={tag}
+                            defaultChecked={filters.productTags?.includes(tag)}
                           />
                           <Text as="span" variant="bodyMd">{tag}</Text>
                         </label>
@@ -477,7 +502,8 @@ export default function Index() {
               : ""}
             {filters.countries?.length ? `Länder: ${filters.countries.join(", ")}. ` : ""}
             {filters.channels?.length ? `Kanäle: ${filters.channels.join(", ")}. ` : ""}
-            {filters.tags?.length ? `Tags: ${filters.tags.join(", ")}.` : ""}
+            {filters.tags?.length ? `Bestellungs-Tags: ${filters.tags.join(", ")}. ` : ""}
+            {filters.productTags?.length ? `Produkt-Tags: ${filters.productTags.join(", ")}.` : ""}
           </Banner>
         )}
 

@@ -13,6 +13,7 @@ export interface Filters {
   channels?: string[]; // Order.channelName values (Shopify sourceName)
   bundleTitles?: string[]; // only include line items belonging to these bundles
   tags?: string[]; // Order.tags — order matches if it has ANY of these tags
+  productTags?: string[]; // Product.tags (per line item) — matches if line item's product has ANY of these tags
 }
 
 interface LineItemRow {
@@ -25,6 +26,7 @@ interface LineItemRow {
   bundleGroupId: string | null;
   bundleTitle: string | null;
   bundleProductId: string | null;
+  productTags: string[];
   orderId: string;
 }
 
@@ -60,6 +62,9 @@ async function lineItemsInRange(
       ...(filters?.bundleTitles?.length
         ? { bundleTitle: { in: filters.bundleTitles } }
         : {}),
+      ...(filters?.productTags?.length
+        ? { productTags: { hasSome: filters.productTags } }
+        : {}),
     },
     select: {
       productId: true,
@@ -71,6 +76,7 @@ async function lineItemsInRange(
       bundleGroupId: true,
       bundleTitle: true,
       bundleProductId: true,
+      productTags: true,
       orderId: true,
     },
   });
@@ -243,7 +249,7 @@ export async function getRevenueTimeSeries(
     select: {
       createdAt: true,
       lineItems: {
-        select: { discountedTotalAmount: true, bundleTitle: true },
+        select: { discountedTotalAmount: true, bundleTitle: true, productTags: true },
       },
     },
   });
@@ -251,12 +257,17 @@ export async function getRevenueTimeSeries(
   const buckets = new Map<string, number>();
   for (const order of orders) {
     const key = periodKey(order.createdAt, granularity);
-    const relevantLineItems = filters?.bundleTitles?.length
+    let relevantLineItems = filters?.bundleTitles?.length
       ? order.lineItems.filter(
           (li: { bundleTitle: string | null }) =>
             li.bundleTitle && filters.bundleTitles!.includes(li.bundleTitle),
         )
       : order.lineItems;
+    if (filters?.productTags?.length) {
+      relevantLineItems = relevantLineItems.filter((li: { productTags: string[] }) =>
+        li.productTags.some((t: string) => filters.productTags!.includes(t)),
+      );
+    }
     const orderRevenue = relevantLineItems.reduce(
       (sum: number, li: { discountedTotalAmount: number }) => sum + li.discountedTotalAmount,
       0,
@@ -464,6 +475,21 @@ export async function getAvailableTags(shop: string): Promise<string[]> {
   const tagSet = new Set<string>();
   for (const r of rows) {
     for (const t of r.tags) tagSet.add(t);
+  }
+  return Array.from(tagSet).sort();
+}
+
+// Same idea as getAvailableTags, but for Product.tags (denormalized onto
+// each OrderLineItem at sync time) — a different concept from order tags:
+// these are the tags set on the product/article itself in Shopify admin.
+export async function getAvailableProductTags(shop: string): Promise<string[]> {
+  const rows = await db.orderLineItem.findMany({
+    where: { shop, productTags: { isEmpty: false } },
+    select: { productTags: true },
+  });
+  const tagSet = new Set<string>();
+  for (const r of rows) {
+    for (const t of r.productTags) tagSet.add(t);
   }
   return Array.from(tagSet).sort();
 }

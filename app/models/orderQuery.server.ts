@@ -22,7 +22,7 @@ export const ORDER_LINE_ITEM_FIELDS = /* GraphQL */ `
   variant {
     id
     title
-    product { id }
+    product { id tags }
     inventoryItem {
       unitCost { amount }
     }
