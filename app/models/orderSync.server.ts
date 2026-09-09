@@ -64,8 +64,14 @@ export function normalizeOrderNode(shop: string, node: any): NormalizedOrder {
       originalTotalAmount: Number(
         li.originalTotalSet?.shopMoney?.amount ?? 0,
       ),
+      // Net revenue for this line: no VAT, and refunded/removed quantities
+      // already excluded by Shopify (priceAfterAllDiscountsBeforeTaxesSet).
+      // Falls back to the older discountedTotalSet (gross, incl. refunded
+      // quantities) only if the new field is ever absent from a response.
       discountedTotalAmount: Number(
-        li.discountedTotalSet?.shopMoney?.amount ?? 0,
+        li.priceAfterAllDiscountsBeforeTaxesSet?.shopMoney?.amount ??
+          li.discountedTotalSet?.shopMoney?.amount ??
+          0,
       ),
       unitCostAmount,
       totalCostAmount: unitCostAmount !== null ? unitCostAmount * quantity : null,

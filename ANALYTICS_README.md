@@ -27,6 +27,22 @@ sie tauchen dann nicht in den Länder-/Kanalfiltern auf. Einmalig beheben:
    vorhandene Bestellungen werden dabei aktualisiert (nicht dupliziert),
    diesmal inklusive Land und Kanal
 
+## Neu: Umsatz jetzt netto und retouren-bereinigt
+
+- **Umsatz = netto (ohne MwSt) UND abzüglich Retouren/Teil-Retouren.**
+  Nutzt jetzt `LineItem.priceAfterAllDiscountsBeforeTaxesSet` (Shopify API
+  2026-07+) statt `discountedTotalSet` — dieses Feld schließt Steuern aus
+  und rechnet retournierte/entfernte Mengen automatisch heraus.
+- **Stornierte Bestellungen (`cancelledAt` gesetzt) waren schon vorher
+  ausgeschlossen** — das ändert sich nicht, war nur vorher nicht in der
+  README erwähnt.
+- **Wichtig — einmaliger Nachsync nötig:** Bereits importierte Bestellungen
+  wurden mit dem alten (teils brutto, retouren-inklusive) Wert gespeichert.
+  Auf **„Daten neu synchronisieren"** klicken, damit alle Bestellungen der
+  letzten 2 Jahre mit dem korrigierten, netto/retouren-bereinigten Umsatz
+  neu abgeglichen werden. Bis dahin sind Zahlen ein Mix aus altem und neuem
+  Berechnungsstand.
+
 ## Was diese App macht
 
 - Synchronisiert Bestellungen (Webhooks `orders/create`, `orders/updated`,

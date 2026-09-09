@@ -13,6 +13,12 @@ export const ORDER_LINE_ITEM_FIELDS = /* GraphQL */ `
   discountedTotalSet {
     shopMoney { amount currencyCode }
   }
+  # Net of VAT AND excludes refunded/removed quantities — this is what
+  # "revenue" means for this app (see orderSync.server.ts). Requires API
+  # version 2026-07+.
+  priceAfterAllDiscountsBeforeTaxesSet {
+    shopMoney { amount currencyCode }
+  }
   variant {
     id
     title

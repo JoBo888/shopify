@@ -57,7 +57,7 @@ model OrderLineItem {
   sku                    String?
   quantity               Int
   originalTotalAmount    Float // list price * quantity, before discounts
-  discountedTotalAmount  Float // actual net revenue attributed to this line
+  discountedTotalAmount  Float // net revenue: after discounts, excl. VAT, excl. refunded/removed quantities
   unitCostAmount         Float? // InventoryItem.unitCost at time of sync, null if not set/visible
   totalCostAmount        Float? // unitCostAmount * quantity, null if unitCostAmount unknown
   bundleGroupId          String? // LineItemGroup id if part of a bundle, else null
