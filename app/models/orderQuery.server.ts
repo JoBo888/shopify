@@ -30,6 +30,7 @@ export const ORDER_LINE_ITEM_FIELDS = /* GraphQL */ `
   lineItemGroup {
     id
     title
+    productId
   }
   customAttributes {
     key

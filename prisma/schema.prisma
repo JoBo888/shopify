@@ -61,10 +61,12 @@ model OrderLineItem {
   unitCostAmount         Float? // InventoryItem.unitCost at time of sync, null if not set/visible
   totalCostAmount        Float? // unitCostAmount * quantity, null if unitCostAmount unknown
   bundleGroupId          String? // LineItemGroup id if part of a bundle, else null
-  bundleTitle            String? // parent bundle product title, if applicable
+  bundleTitle            String? // parent bundle product title, AS SHOWN AT ORDER TIME (locale-dependent — do not use for grouping across orders)
+  bundleProductId        String? // LineItemGroup.productId — stable, locale-independent bundle identity. Null for pre-migration rows or PickyStory-fallback bundles without a resolvable product.
 
   @@index([shop, productId])
   @@index([shop, bundleGroupId])
+  @@index([shop, bundleProductId])
   @@index([orderId])
 }
 

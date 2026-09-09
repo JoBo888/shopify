@@ -25,13 +25,18 @@
  */
 
 export interface RawLineItemForBundleDetection {
-  lineItemGroup?: { id: string; title: string } | null;
+  lineItemGroup?: { id: string; title: string; productId?: string | null } | null;
   customAttributes?: { key: string; value: string }[] | null;
 }
 
 export interface BundleInfo {
   bundleGroupId: string | null;
   bundleTitle: string | null;
+  // Stable, locale-independent identity for the parent bundle product.
+  // `bundleTitle` is presentment-language-dependent (Shopify returns it in
+  // whatever language the customer ordered in), so grouping/deduping across
+  // orders should prefer this field over bundleTitle when it's present.
+  bundleProductId: string | null;
 }
 
 const PICKYSTORY_ATTRIBUTE_KEYS = [
@@ -48,6 +53,7 @@ export function extractBundleInfo(
     return {
       bundleGroupId: lineItem.lineItemGroup.id,
       bundleTitle: lineItem.lineItemGroup.title ?? null,
+      bundleProductId: lineItem.lineItemGroup.productId ?? null,
     };
   }
 
@@ -61,8 +67,8 @@ export function extractBundleInfo(
     ),
   );
   if (bundleAttr) {
-    return { bundleGroupId: bundleAttr.value, bundleTitle: null };
+    return { bundleGroupId: bundleAttr.value, bundleTitle: null, bundleProductId: null };
   }
 
-  return { bundleGroupId: null, bundleTitle: null };
+  return { bundleGroupId: null, bundleTitle: null, bundleProductId: null };
 }

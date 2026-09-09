@@ -23,6 +23,7 @@ interface LineItemRow {
   quantity: number;
   bundleGroupId: string | null;
   bundleTitle: string | null;
+  bundleProductId: string | null;
   orderId: string;
 }
 
@@ -67,6 +68,7 @@ async function lineItemsInRange(
       quantity: true,
       bundleGroupId: true,
       bundleTitle: true,
+      bundleProductId: true,
       orderId: true,
     },
   });
@@ -298,10 +300,11 @@ export interface ProductOrBundleRevenue {
 }
 
 // Groups line items into products vs. bundles. Bundles are grouped by
-// `bundleTitle` (the bundle's product name) rather than `bundleGroupId`
-// (Shopify's LineItemGroup id, which is generated fresh per order and is
-// NOT stable across orders) — this is what makes "3 sales of the same
-// bundle across 3 different orders" collapse into one row instead of three.
+// `bundleProductId` (stable across orders/locales) when available, falling
+// back to `bundleTitle` for older rows or PickyStory-fallback bundles that
+// have no resolvable product id. Falling back to bundleTitle for grouping
+// means pre-migration / PickyStory-only bundles can still fragment across
+// locales — resync after this change to backfill bundleProductId.
 export async function getTopProductsAndBundles(
   shop: string,
   range: DateRange,
@@ -312,15 +315,20 @@ export async function getTopProductsAndBundles(
 
   const grouped = new Map<
     string,
-    ProductOrBundleRevenue & { costedRevenue: number; totalCost: number; orderIds: Set<string> }
+    ProductOrBundleRevenue & {
+      costedRevenue: number;
+      totalCost: number;
+      orderIds: Set<string>;
+      titleCounts: Map<string, number>;
+    }
   >();
 
   for (const li of items) {
     const isBundle = Boolean(li.bundleTitle);
     const key = isBundle
-      ? `bundle:${li.bundleTitle}`
+      ? `bundle:${li.bundleProductId ?? li.bundleTitle}`
       : `product:${li.productId ?? li.productTitle}`;
-    const title = isBundle
+    const displayTitleCandidate = isBundle
       ? li.bundleTitle!
       : li.variantTitle
         ? `${li.productTitle} — ${li.variantTitle}`
@@ -331,6 +339,10 @@ export async function getTopProductsAndBundles(
       existing.revenue += li.discountedTotalAmount;
       existing.unitsSold += li.quantity;
       existing.orderIds.add(li.orderId);
+      existing.titleCounts.set(
+        displayTitleCandidate,
+        (existing.titleCounts.get(displayTitleCandidate) ?? 0) + 1,
+      );
       if (li.totalCostAmount !== null) {
         existing.costedRevenue += li.discountedTotalAmount;
         existing.totalCost += li.totalCostAmount;
@@ -338,7 +350,7 @@ export async function getTopProductsAndBundles(
     } else {
       grouped.set(key, {
         key,
-        title,
+        title: displayTitleCandidate,
         isBundle,
         revenue: li.discountedTotalAmount,
         unitsSold: li.quantity,
@@ -348,6 +360,7 @@ export async function getTopProductsAndBundles(
         costedRevenue: li.totalCostAmount !== null ? li.discountedTotalAmount : 0,
         totalCost: li.totalCostAmount ?? 0,
         orderIds: new Set([li.orderId]),
+        titleCounts: new Map([[displayTitleCandidate, 1]]),
       });
     }
   }
@@ -359,8 +372,23 @@ export async function getTopProductsAndBundles(
         grossProfit !== null && row.costedRevenue > 0
           ? (grossProfit / row.costedRevenue) * 100
           : null;
+      // Majority-vote title: when a bundle was grouped by bundleProductId,
+      // orders may carry different locale titles — show whichever title
+      // occurred most often instead of just "whatever came first".
+      let bestTitle = row.title;
+      let bestCount = 0;
+      for (const [t, count] of row.titleCounts) {
+        if (count > bestCount) {
+          bestTitle = t;
+          bestCount = count;
+        }
+      }
       return {
-        ...row,
+        key: row.key,
+        title: bestTitle,
+        isBundle: row.isBundle,
+        revenue: row.revenue,
+        unitsSold: row.unitsSold,
         orderCount: row.orderIds.size,
         grossProfit,
         grossMarginPct,
@@ -422,14 +450,66 @@ export async function getAvailableChannels(shop: string): Promise<string[]> {
     .sort();
 }
 
-export async function getAvailableBundles(shop: string): Promise<string[]> {
+export interface BundleOption {
+  key: string; // stable filter value: bundleProductId if known, else the raw title
+  title: string; // majority-vote display label across all locale variants
+}
+
+// One row per distinct bundle, deduped across locales via bundleProductId
+// when available (falls back to raw title for rows without a resolvable
+// product id, e.g. pre-migration data or PickyStory-only bundles).
+export async function getAvailableBundles(shop: string): Promise<BundleOption[]> {
   const rows = await db.orderLineItem.findMany({
     where: { shop, bundleTitle: { not: null } },
-    select: { bundleTitle: true },
-    distinct: ["bundleTitle"],
+    select: { bundleTitle: true, bundleProductId: true },
   });
-  return rows
-    .map((r: { bundleTitle: string | null }) => r.bundleTitle)
-    .filter((t: string | null): t is string => Boolean(t))
-    .sort();
+
+  const groups = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    const title = r.bundleTitle;
+    if (!title) continue;
+    const key = r.bundleProductId ?? title;
+    const titleCounts = groups.get(key) ?? new Map<string, number>();
+    titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
+    groups.set(key, titleCounts);
+  }
+
+  const options: BundleOption[] = [];
+  for (const [key, titleCounts] of groups) {
+    let bestTitle = key;
+    let bestCount = 0;
+    for (const [t, count] of titleCounts) {
+      if (count > bestCount) {
+        bestTitle = t;
+        bestCount = count;
+      }
+    }
+    options.push({ key, title: bestTitle });
+  }
+  return options.sort((a, b) => a.title.localeCompare(b.title));
+}
+
+// Resolves canonical bundle filter keys (as produced by getAvailableBundles,
+// and posted back from the checkbox form) into the full set of raw
+// bundleTitle strings that share that key — needed because a single bundle
+// can be stored under several locale-specific titles. Callers should filter
+// with `bundleTitle: { in: <result> }`, not the raw keys directly.
+export async function resolveBundleFilterTitles(
+  shop: string,
+  selectedKeys: string[],
+): Promise<string[]> {
+  if (selectedKeys.length === 0) return [];
+  const keySet = new Set(selectedKeys);
+  const rows = await db.orderLineItem.findMany({
+    where: { shop, bundleTitle: { not: null } },
+    select: { bundleTitle: true, bundleProductId: true },
+    distinct: ["bundleTitle", "bundleProductId"],
+  });
+  const titles = new Set<string>();
+  for (const r of rows) {
+    if (!r.bundleTitle) continue;
+    const key = r.bundleProductId ?? r.bundleTitle;
+    if (keySet.has(key)) titles.add(r.bundleTitle);
+  }
+  return Array.from(titles);
 }

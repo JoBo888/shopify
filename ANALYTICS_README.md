@@ -43,6 +43,33 @@ sie tauchen dann nicht in den Länder-/Kanalfiltern auf. Einmalig beheben:
   neu abgeglichen werden. Bis dahin sind Zahlen ein Mix aus altem und neuem
   Berechnungsstand.
 
+## Neu: Bundle-Erkennung sprachunabhängig gemacht
+
+- **Bundles wurden bisher pro Bestellsprache separat gezählt** (z.B. "EMS
+  HOME System mit 20 Elektroden" / "... with 20 Electrodes" / "...-systeem
+  met 20 elektroden" als 3 verschiedene Zeilen), weil `LineItemGroup.title`
+  laut Shopify in der Sprache zurückkommt, in der die Bestellung aufgegeben
+  wurde — nicht als stabiler Bezeichner gedacht.
+- Gruppierung läuft jetzt über `LineItemGroup.productId` (stabil, sprach­
+  unabhängig, benötigt API 2026-07+). Der angezeigte Titel ist der
+  "Mehrheits-Titel" über alle Sprachvarianten hinweg.
+- **Der Bundle-Filter (Checkbox-Liste) filtert weiterhin korrekt** — eine
+  Auswahl schließt automatisch alle Sprachvarianten des Bundles mit ein.
+- **Wichtig:** Bundles, die noch nie über die native Shopify-Bundle-
+  Mechanik synchronisiert wurden (nur der PickyStory-Fallback ohne
+  `productId`, oder alte Zeilen vor diesem Update), fallen weiterhin auf
+  Titel-Gruppierung zurück und können sich in seltenen Fällen noch
+  aufsplitten — betrifft aber nur bereits synchronisierte Altdaten vor dem
+  nächsten Resync.
+- **Hinweis, was NICHT im Bundle-Filter auftaucht:** Der Filter zeigt nur
+  echte Shopify-Bundles (mehrere Produkte zu einem Paket kombiniert).
+  Einzelprodukte mit z.B. verschiedenen Längen/Größen als Varianten
+  (z. B. "Klimmzugstange, 60 cm" vs. "100 cm") sind **keine Bundles** und
+  erscheinen hier bewusst nicht — das ist kein Fehler, sondern Absicht.
+- **Einmaliger Nachsync nötig**, damit `bundleProductId` für alle
+  Bestellungen nachgetragen wird: oben rechts auf
+  "Daten neu synchronisieren" klicken.
+
 ## Was diese App macht
 
 - Synchronisiert Bestellungen (Webhooks `orders/create`, `orders/updated`,

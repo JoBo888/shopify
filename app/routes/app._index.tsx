@@ -37,6 +37,7 @@ import {
   getAvailableCountries,
   getAvailableChannels,
   getAvailableBundles,
+  resolveBundleFilterTitles,
   type Filters,
   type DateRange,
 } from "../models/analytics.server";
@@ -120,17 +121,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? { from: new Date(compareFromParam), to: endOfDay(new Date(compareToParam)) }
       : undefined;
 
-  const filters: Filters = {
-    countries: params.getAll("country"),
-    channels: params.getAll("channel"),
-    bundleTitles: params.getAll("bundle"),
-  };
+  const selectedBundleKeys = params.getAll("bundle");
 
   const syncState = await getSyncState(shop);
 
   if (!syncState || syncState.backfillStatus === "pending") {
     return { needsBackfill: true as const, syncState };
   }
+
+  // Resolve the canonical bundle keys (productId-based, from the checkbox
+  // form) into the actual raw bundleTitle strings stored per line item —
+  // a single bundle can be stored under several locale-specific titles.
+  const resolvedBundleTitles = await resolveBundleFilterTitles(shop, selectedBundleKeys);
+  const filters: Filters = {
+    countries: params.getAll("country"),
+    channels: params.getAll("channel"),
+    bundleTitles: resolvedBundleTitles,
+  };
 
   const daySpanMs = range.to.getTime() - range.from.getTime();
   const granularity = daySpanMs > 1000 * 60 * 60 * 24 * 120 ? ("month" as const) : ("day" as const);
@@ -154,6 +161,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? { from: isoDate(compareRange.from), to: isoDate(compareRange.to) }
       : null,
     filters,
+    selectedBundleKeys,
     comparison,
     timeSeries: timeSeriesData.current,
     previousTimeSeries: timeSeriesData.previous,
@@ -244,11 +252,11 @@ export default function Index() {
     );
   }
 
-  const { comparison, topItems, bundleSplit, syncState, range, compareRange, filters } = data;
+  const { comparison, topItems, bundleSplit, syncState, range, compareRange, filters, selectedBundleKeys } = data;
   const currency = "EUR";
 
   const activeFilterCount =
-    (filters.countries?.length ?? 0) + (filters.channels?.length ?? 0) + (filters.bundleTitles?.length ?? 0);
+    (filters.countries?.length ?? 0) + (filters.channels?.length ?? 0) + (selectedBundleKeys?.length ?? 0);
 
   const productRows = topItems.map((item) => [
     item.title,
@@ -304,7 +312,10 @@ export default function Index() {
               </InlineStack>
             </InlineStack>
 
-            <Form method="get">
+            <Form
+              method="get"
+              onSubmit={() => setFiltersOpen(false)}
+            >
               <BlockStack gap="400">
                 <InlineStack gap="400" wrap>
                   <Box minWidth="160px">
@@ -404,15 +415,15 @@ export default function Index() {
                           Keine Bundles im gewählten Zeitraum gefunden.
                         </Text>
                       )}
-                      {data.availableBundles.map((title) => (
-                        <label key={title} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {data.availableBundles.map((bundle) => (
+                        <label key={bundle.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <input
                             type="checkbox"
                             name="bundle"
-                            value={title}
-                            defaultChecked={filters.bundleTitles?.includes(title)}
+                            value={bundle.key}
+                            defaultChecked={selectedBundleKeys?.includes(bundle.key)}
                           />
-                          <Text as="span" variant="bodyMd">{title}</Text>
+                          <Text as="span" variant="bodyMd">{bundle.title}</Text>
                         </label>
                       ))}
                     </BlockStack>
@@ -431,8 +442,11 @@ export default function Index() {
 
         {activeFilterCount > 0 && (
           <Banner tone="info">
-            {filters.bundleTitles?.length
-              ? `Ansicht eingeschränkt auf ${filters.bundleTitles.length} Bundle(s): ${filters.bundleTitles.join(", ")}. `
+            {selectedBundleKeys?.length
+              ? `Ansicht eingeschränkt auf ${selectedBundleKeys.length} Bundle(s): ${data.availableBundles
+                  .filter((b) => selectedBundleKeys.includes(b.key))
+                  .map((b) => b.title)
+                  .join(", ")}. `
               : ""}
             {filters.countries?.length ? `Länder: ${filters.countries.join(", ")}. ` : ""}
             {filters.channels?.length ? `Kanäle: ${filters.channels.join(", ")}.` : ""}

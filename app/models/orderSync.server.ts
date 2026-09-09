@@ -32,6 +32,7 @@ export interface NormalizedLineItem {
   totalCostAmount: number | null;
   bundleGroupId: string | null;
   bundleTitle: string | null;
+  bundleProductId: string | null;
 }
 
 // Converts a single GraphQL `order` node (from ORDER_BY_ID_QUERY, or a
@@ -77,6 +78,7 @@ export function normalizeOrderNode(shop: string, node: any): NormalizedOrder {
       totalCostAmount: unitCostAmount !== null ? unitCostAmount * quantity : null,
       bundleGroupId: bundle.bundleGroupId,
       bundleTitle: bundle.bundleTitle,
+      bundleProductId: bundle.bundleProductId,
     };
   });
 
@@ -147,6 +149,7 @@ export async function upsertOrder(order: NormalizedOrder): Promise<void> {
           totalCostAmount: li.totalCostAmount,
           bundleGroupId: li.bundleGroupId,
           bundleTitle: li.bundleTitle,
+          bundleProductId: li.bundleProductId,
         })),
       });
     }
