@@ -27,11 +27,15 @@ model Order {
   totalPriceAmount      Float
   totalDiscountsAmount  Float
   test                  Boolean         @default(false)
+  shippingCountryCode   String? // ISO 3166-1 alpha-2, aus order.shippingAddress.countryCode
+  channelName           String? // aus order.sourceName, z.B. "web", "pos", oder ein App-/Marktplatz-Name
   updatedAt             DateTime        @default(now())
   lineItems             OrderLineItem[]
 
   @@index([shop, createdAt])
   @@index([shop, cancelledAt])
+  @@index([shop, shippingCountryCode])
+  @@index([shop, channelName])
 }
 
 // One row per order line item. `bundleGroupId` links sibling line items that

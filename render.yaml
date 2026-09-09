@@ -19,10 +19,14 @@
 
 databases:
   - name: umsatz-analyse-db
-    plan: starter # NICHT "free": das kostenlose Postgres läuft nach 30 Tagen ab
-                  # und würde die App unbrauchbar machen. "starter" kostet aktuell
-                  # ca. 7 $/Monat. Zum unverbindlichen Ausprobieren kann "free"
-                  # eingetragen werden — dann aber vor Produktivbetrieb umstellen.
+    plan: basic-256mb # NICHT "free": das kostenlose Postgres läuft nach 30 Tagen
+                  # ab und würde die App unbrauchbar machen. NICHT "starter": das
+                  # war der alte Name für Postgres-Tarife, Render akzeptiert ihn
+                  # für neue Datenbanken nicht mehr ("Legacy Postgres plans...
+                  # are no longer supported for new databases") — der aktuelle
+                  # Einstiegstarif heißt "basic-256mb" (~7 $/Monat). Zum
+                  # unverbindlichen Ausprobieren kann "free" eingetragen werden —
+                  # dann aber vor Produktivbetrieb umstellen.
     databaseName: umsatz_analyse
     user: umsatz_analyse
 
@@ -36,7 +40,6 @@ services:
                   # Aufruf im Shopify-iframe hängt bei "Cold Start". "starter"
                   # kostet aktuell ca. 7 $/Monat und bleibt dauerhaft aktiv.
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /app
     envVars:
       - key: DATABASE_URL
         fromDatabase:

@@ -5,6 +5,15 @@ export interface DateRange {
   to: Date;
 }
 
+// Applied on top of a DateRange. Every field is optional / "no filter" when
+// omitted or an empty array, so existing callers that only pass a DateRange
+// keep working unchanged.
+export interface Filters {
+  countries?: string[]; // Order.shippingCountryCode values (ISO alpha-2)
+  channels?: string[]; // Order.channelName values (Shopify sourceName)
+  bundleTitles?: string[]; // only include line items belonging to these bundles
+}
+
 interface LineItemRow {
   productId: string | null;
   productTitle: string;
@@ -17,22 +26,37 @@ interface LineItemRow {
   orderId: string;
 }
 
+function orderWhere(shop: string, range: DateRange, filters?: Filters) {
+  return {
+    shop,
+    createdAt: { gte: range.from, lte: range.to },
+    cancelledAt: null,
+    test: false,
+    ...(filters?.countries?.length
+      ? { shippingCountryCode: { in: filters.countries } }
+      : {}),
+    ...(filters?.channels?.length
+      ? { channelName: { in: filters.channels } }
+      : {}),
+  };
+}
+
 // Line items from cancelled orders, and test orders, are excluded from
-// revenue by default — flip `includeTest` if you want to sanity-check with
-// test orders while developing.
+// revenue by default. When `filters.bundleTitles` is set, only line items
+// belonging to one of those bundles are returned — used for the bundle
+// drill-down view.
 async function lineItemsInRange(
   shop: string,
   range: DateRange,
-  includeTest = false,
-) {
+  filters?: Filters,
+): Promise<LineItemRow[]> {
   return db.orderLineItem.findMany({
     where: {
       shop,
-      order: {
-        createdAt: { gte: range.from, lte: range.to },
-        cancelledAt: null,
-        ...(includeTest ? {} : { test: false }),
-      },
+      order: orderWhere(shop, range, filters),
+      ...(filters?.bundleTitles?.length
+        ? { bundleTitle: { in: filters.bundleTitles } }
+        : {}),
     },
     select: {
       productId: true,
@@ -60,8 +84,9 @@ export interface PeriodTotals {
 export async function getPeriodTotals(
   shop: string,
   range: DateRange,
+  filters?: Filters,
 ): Promise<PeriodTotals> {
-  const items: LineItemRow[] = await lineItemsInRange(shop, range);
+  const items = await lineItemsInRange(shop, range, filters);
   const revenue = items.reduce((sum: number, li) => sum + li.discountedTotalAmount, 0);
   const orderIds = new Set(items.map((li) => li.orderId));
   const orderCount = orderIds.size;
@@ -75,8 +100,6 @@ export async function getPeriodTotals(
     }
   }
   const costDataCoveragePct = revenue > 0 ? (costedRevenue / revenue) * 100 : 0;
-  // Only report gross profit/margin once we actually have cost data for at
-  // least some line items — otherwise it's not "no profit", it's "unknown".
   const grossProfit = costedRevenue > 0 ? costedRevenue - totalCost : null;
   const grossMarginPct =
     grossProfit !== null && costedRevenue > 0 ? (grossProfit / costedRevenue) * 100 : null;
@@ -91,12 +114,13 @@ export async function getPeriodTotals(
   };
 }
 
-export interface YoYComparison {
+export interface PeriodComparison {
   current: PeriodTotals;
   previous: PeriodTotals;
-  revenueChangePct: number | null; // null when previous period had zero revenue
+  previousLabel: string; // e.g. "Vorjahr" or "1. Jan – 31. Mär 2025"
+  revenueChangePct: number | null;
   orderCountChangePct: number | null;
-  grossProfitChangePct: number | null; // null when profit data unavailable for either period
+  grossProfitChangePct: number | null;
 }
 
 function shiftRangeByOneYear(range: DateRange): DateRange {
@@ -112,19 +136,30 @@ function pctChange(current: number, previous: number): number | null {
   return ((current - previous) / previous) * 100;
 }
 
-export async function getYoYComparison(
+// `compareRange` lets the caller supply an explicit custom comparison period
+// (e.g. a different quarter). If omitted, defaults to "same dates, one year
+// earlier" — the classic YoY comparison.
+export async function getPeriodComparison(
   shop: string,
   range: DateRange,
-): Promise<YoYComparison> {
-  const previousRange = shiftRangeByOneYear(range);
+  filters?: Filters,
+  compareRange?: DateRange,
+): Promise<PeriodComparison> {
+  const previousRange = compareRange ?? shiftRangeByOneYear(range);
   const [current, previous] = await Promise.all([
-    getPeriodTotals(shop, range),
-    getPeriodTotals(shop, previousRange),
+    getPeriodTotals(shop, range, filters),
+    getPeriodTotals(shop, previousRange, filters),
   ]);
+
+  const fmt = (d: Date) => d.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
+  const previousLabel = compareRange
+    ? `${fmt(previousRange.from)} – ${fmt(previousRange.to)}`
+    : "Vorjahr";
 
   return {
     current,
     previous,
+    previousLabel,
     revenueChangePct: pctChange(current.revenue, previous.revenue),
     orderCountChangePct: pctChange(current.orderCount, previous.orderCount),
     grossProfitChangePct:
@@ -144,7 +179,6 @@ export interface TimeSeriesPoint {
 function periodKey(date: Date, granularity: Granularity): string {
   if (granularity === "day") return date.toISOString().slice(0, 10);
   if (granularity === "month") return date.toISOString().slice(0, 7);
-  // ISO week key: year + week number
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = (d.getUTCDay() + 6) % 7;
   d.setUTCDate(d.getUTCDate() - dayNum + 3);
@@ -164,26 +198,29 @@ export async function getRevenueTimeSeries(
   shop: string,
   range: DateRange,
   granularity: Granularity = "day",
+  filters?: Filters,
 ): Promise<TimeSeriesPoint[]> {
   const orders = await db.order.findMany({
-    where: {
-      shop,
-      createdAt: { gte: range.from, lte: range.to },
-      cancelledAt: null,
-      test: false,
-    },
+    where: orderWhere(shop, range, filters),
     select: {
       createdAt: true,
-      lineItems: { select: { discountedTotalAmount: true } },
+      lineItems: {
+        select: { discountedTotalAmount: true, bundleTitle: true },
+      },
     },
   });
 
   const buckets = new Map<string, number>();
   for (const order of orders) {
     const key = periodKey(order.createdAt, granularity);
-    const orderRevenue = order.lineItems.reduce(
-      (sum: number, li: { discountedTotalAmount: number }) =>
-        sum + li.discountedTotalAmount,
+    const relevantLineItems = filters?.bundleTitles?.length
+      ? order.lineItems.filter(
+          (li: { bundleTitle: string | null }) =>
+            li.bundleTitle && filters.bundleTitles!.includes(li.bundleTitle),
+        )
+      : order.lineItems;
+    const orderRevenue = relevantLineItems.reduce(
+      (sum: number, li: { discountedTotalAmount: number }) => sum + li.discountedTotalAmount,
       0,
     );
     buckets.set(key, (buckets.get(key) ?? 0) + orderRevenue);
@@ -195,35 +232,41 @@ export async function getRevenueTimeSeries(
 }
 
 export interface ProductOrBundleRevenue {
-  key: string; // productId or bundleGroupId
+  key: string; // productId, or "bundle:<title>" for bundles
   title: string;
   isBundle: boolean;
   revenue: number;
   unitsSold: number;
-  grossProfit: number | null; // null if no cost data known for this item
+  orderCount: number; // how many distinct orders included this product/bundle
+  grossProfit: number | null;
   grossMarginPct: number | null;
 }
 
-// Groups line items into products vs. bundles: components sharing the same
-// bundleGroupId are collapsed into a single "bundle" row so a $120 bundle of
-// three $40 items shows up as one $120 line, not three separate products.
+// Groups line items into products vs. bundles. Bundles are grouped by
+// `bundleTitle` (the bundle's product name) rather than `bundleGroupId`
+// (Shopify's LineItemGroup id, which is generated fresh per order and is
+// NOT stable across orders) — this is what makes "3 sales of the same
+// bundle across 3 different orders" collapse into one row instead of three.
 export async function getTopProductsAndBundles(
   shop: string,
   range: DateRange,
   limit = 15,
+  filters?: Filters,
 ): Promise<ProductOrBundleRevenue[]> {
-  const items: LineItemRow[] = await lineItemsInRange(shop, range);
+  const items = await lineItemsInRange(shop, range, filters);
 
   const grouped = new Map<
     string,
-    ProductOrBundleRevenue & { costedRevenue: number; totalCost: number }
+    ProductOrBundleRevenue & { costedRevenue: number; totalCost: number; orderIds: Set<string> }
   >();
 
   for (const li of items) {
-    const isBundle = Boolean(li.bundleGroupId);
-    const key = isBundle ? `bundle:${li.bundleGroupId}` : `product:${li.productId ?? li.productTitle}`;
+    const isBundle = Boolean(li.bundleTitle);
+    const key = isBundle
+      ? `bundle:${li.bundleTitle}`
+      : `product:${li.productId ?? li.productTitle}`;
     const title = isBundle
-      ? li.bundleTitle ?? "Bundle"
+      ? li.bundleTitle!
       : li.variantTitle
         ? `${li.productTitle} — ${li.variantTitle}`
         : li.productTitle;
@@ -232,6 +275,7 @@ export async function getTopProductsAndBundles(
     if (existing) {
       existing.revenue += li.discountedTotalAmount;
       existing.unitsSold += li.quantity;
+      existing.orderIds.add(li.orderId);
       if (li.totalCostAmount !== null) {
         existing.costedRevenue += li.discountedTotalAmount;
         existing.totalCost += li.totalCostAmount;
@@ -243,10 +287,12 @@ export async function getTopProductsAndBundles(
         isBundle,
         revenue: li.discountedTotalAmount,
         unitsSold: li.quantity,
+        orderCount: 0,
         grossProfit: null,
         grossMarginPct: null,
         costedRevenue: li.totalCostAmount !== null ? li.discountedTotalAmount : 0,
         totalCost: li.totalCostAmount ?? 0,
+        orderIds: new Set([li.orderId]),
       });
     }
   }
@@ -258,7 +304,12 @@ export async function getTopProductsAndBundles(
         grossProfit !== null && row.costedRevenue > 0
           ? (grossProfit / row.costedRevenue) * 100
           : null;
-      return { ...row, grossProfit, grossMarginPct };
+      return {
+        ...row,
+        orderCount: row.orderIds.size,
+        grossProfit,
+        grossMarginPct,
+      };
     })
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, limit);
@@ -273,12 +324,13 @@ export interface BundleVsStandaloneSplit {
 export async function getBundleVsStandaloneSplit(
   shop: string,
   range: DateRange,
+  filters?: Filters,
 ): Promise<BundleVsStandaloneSplit> {
-  const items: LineItemRow[] = await lineItemsInRange(shop, range);
+  const items = await lineItemsInRange(shop, range, filters);
   let bundleRevenue = 0;
   let standaloneRevenue = 0;
   for (const li of items) {
-    if (li.bundleGroupId) bundleRevenue += li.discountedTotalAmount;
+    if (li.bundleTitle) bundleRevenue += li.discountedTotalAmount;
     else standaloneRevenue += li.discountedTotalAmount;
   }
   const total = bundleRevenue + standaloneRevenue;
@@ -287,4 +339,42 @@ export async function getBundleVsStandaloneSplit(
     standaloneRevenue,
     bundleSharePct: total > 0 ? (bundleRevenue / total) * 100 : 0,
   };
+}
+
+// ---- Filter option lists (populate the dashboard's checkboxes/dropdowns) ----
+
+export async function getAvailableCountries(shop: string): Promise<string[]> {
+  const rows = await db.order.findMany({
+    where: { shop, shippingCountryCode: { not: null } },
+    select: { shippingCountryCode: true },
+    distinct: ["shippingCountryCode"],
+  });
+  return rows
+    .map((r: { shippingCountryCode: string | null }) => r.shippingCountryCode)
+    .filter((c: string | null): c is string => Boolean(c))
+    .sort();
+}
+
+export async function getAvailableChannels(shop: string): Promise<string[]> {
+  const rows = await db.order.findMany({
+    where: { shop, channelName: { not: null } },
+    select: { channelName: true },
+    distinct: ["channelName"],
+  });
+  return rows
+    .map((r: { channelName: string | null }) => r.channelName)
+    .filter((c: string | null): c is string => Boolean(c))
+    .sort();
+}
+
+export async function getAvailableBundles(shop: string): Promise<string[]> {
+  const rows = await db.orderLineItem.findMany({
+    where: { shop, bundleTitle: { not: null } },
+    select: { bundleTitle: true },
+    distinct: ["bundleTitle"],
+  });
+  return rows
+    .map((r: { bundleTitle: string | null }) => r.bundleTitle)
+    .filter((t: string | null): t is string => Boolean(t))
+    .sort();
 }

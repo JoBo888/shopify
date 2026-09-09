@@ -10,6 +10,8 @@ export interface NormalizedOrder {
   createdAt: string;
   cancelledAt: string | null;
   test: boolean;
+  shippingCountryCode: string | null;
+  channelName: string | null;
   currencyCode: string;
   totalPriceAmount: number;
   totalDiscountsAmount: number;
@@ -79,6 +81,8 @@ export function normalizeOrderNode(shop: string, node: any): NormalizedOrder {
     createdAt: node.createdAt,
     cancelledAt: node.cancelledAt ?? null,
     test: Boolean(node.test),
+    shippingCountryCode: node.shippingAddress?.countryCode ?? null,
+    channelName: node.sourceName ?? null,
     currencyCode: node.totalPriceSet?.shopMoney?.currencyCode ?? "EUR",
     totalPriceAmount: Number(node.totalPriceSet?.shopMoney?.amount ?? 0),
     totalDiscountsAmount: Number(
@@ -104,11 +108,15 @@ export async function upsertOrder(order: NormalizedOrder): Promise<void> {
         totalPriceAmount: order.totalPriceAmount,
         totalDiscountsAmount: order.totalDiscountsAmount,
         test: order.test,
+        shippingCountryCode: order.shippingCountryCode,
+        channelName: order.channelName,
       },
       update: {
         cancelledAt: order.cancelledAt ? new Date(order.cancelledAt) : null,
         totalPriceAmount: order.totalPriceAmount,
         totalDiscountsAmount: order.totalDiscountsAmount,
+        shippingCountryCode: order.shippingCountryCode,
+        channelName: order.channelName,
         updatedAt: new Date(),
       },
     });

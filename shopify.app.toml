@@ -1,71 +1,44 @@
-# This file stores configurations for your Shopify app.
-# Run `shopify app config link` after creating the app in your Partner Dashboard
-# to fill in client_id automatically.
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = ""
+client_id = "37513b00397e3d39fefd0d91b68f994d"
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = true
+name = "Rentability"
 
 [access_scopes]
-# read_orders: order totals, line items, discounts (revenue calculation)
-# read_all_orders: needed to backfill orders older than 60 days for YoY comparisons
-#                  (this scope requires justification in the App Store review /
-#                  or a "protected customer data" access request for custom apps)
-# read_products: product & variant titles for the product/bundle breakdown
-# read_inventory: InventoryItem.unitCost ("Cost per item") for margin/Ertrag calculation.
-#                 Note: also requires the "View product costs" permission to be
-#                 granted to the app/user in the store's staff permissions.
-scopes = "read_orders,read_all_orders,read_products,read_inventory"
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = ""
 
 [webhooks]
-api_version = "2025-01"
+api_version = "2026-10"
 
-  # Handled by: /app/routes/webhooks.app.uninstalled.tsx
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
-  topics = ["app/uninstalled"]
+  topics = [ "app/uninstalled" ]
 
-  # Handled by: /app/routes/webhooks.app.scopes_update.tsx
   [[webhooks.subscriptions]]
-  topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
 
-  # Handled by: /app/routes/webhooks.orders.create.tsx
   [[webhooks.subscriptions]]
-  topics = ["orders/create"]
   uri = "/webhooks/orders/create"
+  topics = [ "orders/create" ]
 
-  # Handled by: /app/routes/webhooks.orders.updated.tsx
   [[webhooks.subscriptions]]
-  topics = ["orders/updated"]
   uri = "/webhooks/orders/updated"
+  topics = [ "orders/updated" ]
 
-  # Handled by: /app/routes/webhooks.orders.cancelled.tsx
   [[webhooks.subscriptions]]
-  topics = ["orders/cancelled"]
   uri = "/webhooks/orders/cancelled"
+  topics = [ "orders/cancelled" ]
 
-  # Handled by: /app/routes/webhooks.bulk-operations.finish.tsx
   [[webhooks.subscriptions]]
-  topics = ["bulk_operations/finish"]
   uri = "/webhooks/bulk-operations/finish"
+  topics = [ "bulk_operations/finish" ]
 
-  # Webhooks can have filters
-  # Only receive webhooks for product updates with a product price >= 10.00
-  # See: https://shopify.dev/docs/apps/build/webhooks/customize/filters
-  # [[webhooks.subscriptions]]
-  # topics = ["products/update"]
-  # uri = "/webhooks/products/update"
-  # filter = "variants.price:>=10.00"
+[auth]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
 
-  # Mandatory compliance topic for public apps only
-  # See: https://shopify.dev/docs/apps/build/privacy-law-compliance
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/customers/data_request"
-  # compliance_topics = ["customers/data_request"]
-
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/customers/redact"
-  # compliance_topics = ["customers/redact"]
-
-  # [[webhooks.subscriptions]]
-  # uri = "/webhooks/shop/redact"
-  # compliance_topics = ["shop/redact"]
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true

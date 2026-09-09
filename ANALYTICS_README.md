@@ -3,6 +3,30 @@
 Diese App basiert auf dem offiziellen Shopify Remix-App-Template und wurde um
 ein Umsatz-Dashboard mit Jahresvergleich und Bundle-Auswertung erweitert.
 
+## Neu: Filter, freier Zeitraum & Bundle-Drill-down
+
+- **Freier Zeitraum** über Von/Bis-Datumsfelder (statt nur fixer Presets)
+- **Eigener Vergleichszeitraum** wahlweise statt automatisch "Vorjahr"
+- **Filter nach Zielland** (Lieferadresse) und **Vertriebskanal** (`sourceName`,
+  z. B. Onlineshop vs. POS vs. Draft Orders)
+- **Bundle-Drill-down**: ein oder mehrere Bundles auswählen, um Umsatz/Ertrag
+  nur für diese über die Zeit zu sehen
+- **Bundle-Gruppierungsfehler behoben**: Bundles wurden vorher pro Bestellung
+  einzeln gezählt (da Shopifys `LineItemGroup`-ID pro Bestellung neu vergeben
+  wird), jetzt korrekt über den Bundle-**Titel** hinweg aggregiert
+
+### Wichtig: einmaliger Nachsync für bereits importierte Bestellungen
+
+Land und Vertriebskanal sind neue Datenfelder. Bestellungen, die **vor**
+diesem Update importiert wurden, haben diese Felder noch leer (`null`) —
+sie tauchen dann nicht in den Länder-/Kanalfiltern auf. Einmalig beheben:
+
+1. App im Store öffnen
+2. Oben rechts auf **"Daten neu synchronisieren"** klicken
+3. Das startet einen neuen Bulk-Abgleich über die letzten 2 Jahre — bereits
+   vorhandene Bestellungen werden dabei aktualisiert (nicht dupliziert),
+   diesmal inklusive Land und Kanal
+
 ## Was diese App macht
 
 - Synchronisiert Bestellungen (Webhooks `orders/create`, `orders/updated`,
@@ -175,11 +199,16 @@ Zip-Datei. Der Ablauf ist aber danach wirklich nur noch wenige Klicks:
      Für ein privates Repo (empfohlen, da hier eure Store-Zugangsdaten
      landen) ist der manuelle "New + → Blueprint"-Weg oben der richtige. -->
 
-> **Kostenhinweis:** `render.yaml` ist bewusst auf den bezahlten
-> "starter"-Tarif für Web-Service *und* Datenbank voreingestellt (zusammen
-> ca. 14 $/Monat). Der kostenlose Tarif pausiert Web-Services nach 15
-> Minuten Inaktivität und lässt die Datenbank nach 30 Tagen ablaufen — für
-> zuverlässige Webhook-Verarbeitung (Bestellsynchronisation) ungeeignet. Zum
+> **Kostenhinweis:** `render.yaml` ist bewusst auf bezahlte Tarife
+> voreingestellt — Web-Service auf `starter` (~7 $/Monat), Datenbank auf
+> `basic-256mb` (~7 $/Monat, zusammen ca. 14 $/Monat). Render benennt
+> Postgres-Tarife inzwischen anders als Compute-Tarife: der alte Name
+> `starter` funktioniert für Datenbanken nicht mehr ("Legacy Postgres
+> plans... are no longer supported for new databases") — deshalb hier
+> zwei unterschiedliche Tarifnamen für zwei unterschiedliche Dinge. Der
+> kostenlose Tarif pausiert Web-Services nach 15 Minuten Inaktivität und
+> lässt die Datenbank nach 30 Tagen ablaufen — für zuverlässige
+> Webhook-Verarbeitung (Bestellsynchronisation) ungeeignet. Zum
 > unverbindlichen ersten Ausprobieren kann in `render.yaml` trotzdem
 > `plan: free` eingetragen werden, sollte vor Produktivbetrieb aber
 > umgestellt werden.
