@@ -1,11 +1,5 @@
 import db from "../db.server";
 
-// Flat assumed material cost ratio, used INSTEAD OF actual per-item cost
-// data for all gross-profit calculations (per explicit request — actual
-// unitCost/totalCostAmount figures, where present, are intentionally
-// ignored for this metric). Gross profit = revenue * (1 - this).
-export const ASSUMED_MATERIAL_COST_RATIO = 0.36;
-
 export interface DateRange {
   from: Date;
   to: Date;
@@ -92,12 +86,6 @@ export interface PeriodTotals {
   revenue: number;
   orderCount: number;
   averageOrderValue: number;
-  // Gross profit is ALWAYS revenue * (1 - ASSUMED_MATERIAL_COST_RATIO) —
-  // a flat, assumed material cost ratio, not derived from actual per-item
-  // cost data (per explicit request). Never null: defined whenever revenue
-  // is defined.
-  grossProfit: number;
-  grossMarginPct: number;
 }
 
 export async function getPeriodTotals(
@@ -110,15 +98,10 @@ export async function getPeriodTotals(
   const orderIds = new Set(items.map((li) => li.orderId));
   const orderCount = orderIds.size;
 
-  const grossProfit = revenue * (1 - ASSUMED_MATERIAL_COST_RATIO);
-  const grossMarginPct = (1 - ASSUMED_MATERIAL_COST_RATIO) * 100;
-
   return {
     revenue,
     orderCount,
     averageOrderValue: orderCount > 0 ? revenue / orderCount : 0,
-    grossProfit,
-    grossMarginPct,
   };
 }
 
@@ -128,7 +111,6 @@ export interface PeriodComparison {
   previousLabel: string; // e.g. "Vorjahr" or "1. Jan – 31. Mär 2025"
   revenueChangePct: number | null;
   orderCountChangePct: number | null;
-  grossProfitChangePct: number | null;
 }
 
 function shiftRangeByOneYear(range: DateRange): DateRange {
@@ -170,7 +152,6 @@ export async function getPeriodComparison(
     previousLabel,
     revenueChangePct: pctChange(current.revenue, previous.revenue),
     orderCountChangePct: pctChange(current.orderCount, previous.orderCount),
-    grossProfitChangePct: pctChange(current.grossProfit, previous.grossProfit),
   };
 }
 
@@ -303,10 +284,6 @@ export interface ProductOrBundleRevenue {
   revenue: number;
   unitsSold: number;
   orderCount: number; // how many distinct orders included this product/bundle
-  // Always revenue * (1 - ASSUMED_MATERIAL_COST_RATIO) — flat assumed
-  // material cost, not derived from actual per-item cost data.
-  grossProfit: number;
-  grossMarginPct: number;
 }
 
 // Groups line items into products vs. bundles. Bundles are grouped by
@@ -359,8 +336,6 @@ export async function getTopProductsAndBundles(
         revenue: li.discountedTotalAmount,
         unitsSold: li.quantity,
         orderCount: 0,
-        grossProfit: 0,
-        grossMarginPct: 0,
         orderIds: new Set([li.orderId]),
         titleCounts: new Map([[displayTitleCandidate, 1]]),
       });
@@ -369,8 +344,6 @@ export async function getTopProductsAndBundles(
 
   return Array.from(grouped.values())
     .map((row) => {
-      const grossProfit = row.revenue * (1 - ASSUMED_MATERIAL_COST_RATIO);
-      const grossMarginPct = (1 - ASSUMED_MATERIAL_COST_RATIO) * 100;
       // Majority-vote title: when a bundle was grouped by bundleProductId,
       // orders may carry different locale titles — show whichever title
       // occurred most often instead of just "whatever came first".
@@ -389,8 +362,6 @@ export async function getTopProductsAndBundles(
         revenue: row.revenue,
         unitsSold: row.unitsSold,
         orderCount: row.orderIds.size,
-        grossProfit,
-        grossMarginPct,
       };
     })
     .sort((a, b) => b.revenue - a.revenue)

@@ -276,7 +276,6 @@ export default function Index() {
     String(item.unitsSold),
     String(item.orderCount),
     formatMoney(item.revenue, currency),
-    formatMoney(item.grossProfit, currency) + ` (${item.grossMarginPct.toFixed(0)}%)`,
   ]);
 
   return (
@@ -510,7 +509,7 @@ export default function Index() {
 
         <Layout>
           <Layout.Section>
-            <InlineGrid columns={{ xs: 1, sm: 2, md: 3, lg: 5 }} gap="400">
+            <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
               <Card>
                 <BlockStack gap="200">
                   <Text as="span" variant="bodySm" tone="subdued">Umsatz (Zeitraum)</Text>
@@ -529,22 +528,6 @@ export default function Index() {
                   <Badge tone={comparison.orderCountChangePct !== null && comparison.orderCountChangePct >= 0 ? "success" : "critical"}>
                     {`${formatPct(comparison.orderCountChangePct)} ggü. ${comparison.previousLabel}`}
                   </Badge>
-                </BlockStack>
-              </Card>
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="span" variant="bodySm" tone="subdued">Ertrag (Rohgewinn)</Text>
-                  <Text as="p" variant="headingLg">
-                    {formatMoney(comparison.current.grossProfit, currency)}
-                  </Text>
-                  <InlineStack gap="200">
-                    <Badge tone={comparison.grossProfitChangePct !== null && comparison.grossProfitChangePct >= 0 ? "success" : "critical"}>
-                      {`${formatPct(comparison.grossProfitChangePct)} ggü. ${comparison.previousLabel}`}
-                    </Badge>
-                    <Badge tone="info">
-                      {`kalkuliert, 36% Materialeinsatz angesetzt`}
-                    </Badge>
-                  </InlineStack>
                 </BlockStack>
               </Card>
               <Card>
@@ -608,8 +591,8 @@ export default function Index() {
                   <Text as="p" tone="subdued">Keine Umsätze im gewählten Zeitraum / mit diesen Filtern.</Text>
                 ) : (
                   <DataTable
-                    columnContentTypes={["text", "text", "numeric", "numeric", "numeric", "numeric"]}
-                    headings={["Produkt / Bundle", "Typ", "Einheiten", "Bestellungen", "Umsatz", "Ertrag (Marge)"]}
+                    columnContentTypes={["text", "text", "numeric", "numeric", "numeric"]}
+                    headings={["Produkt / Bundle", "Typ", "Einheiten", "Bestellungen", "Umsatz"]}
                     rows={productRows}
                   />
                 )}
