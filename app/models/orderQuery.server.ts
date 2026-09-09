@@ -48,6 +48,7 @@ export const ORDER_BY_ID_QUERY = /* GraphQL */ `
       cancelledAt
       test
       sourceName
+      tags
       shippingAddress { countryCode }
       totalPriceSet {
         shopMoney { amount currencyCode }
@@ -76,6 +77,7 @@ export function buildBulkBackfillQuery(sinceISODate: string): string {
             cancelledAt
             test
             sourceName
+            tags
             shippingAddress { countryCode }
             totalPriceSet { shopMoney { amount currencyCode } }
             totalDiscountsSet { shopMoney { amount currencyCode } }

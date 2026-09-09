@@ -70,6 +70,14 @@ sie tauchen dann nicht in den Länder-/Kanalfiltern auf. Einmalig beheben:
   Bestellungen nachgetragen wird: oben rechts auf
   "Daten neu synchronisieren" klicken.
 
+## Neu: Filter nach Bestellungs-Tags
+
+- Vierte Filter-Spalte "Tags" neben Zielländer/Vertriebskanäle/Bundles —
+  Mehrfachauswahl möglich, eine Bestellung matcht, wenn sie **mindestens
+  einen** der ausgewählten Tags trägt.
+- Braucht ebenfalls einen einmaligen Nachsync ("Daten neu synchronisieren"),
+  damit `tags` für bestehende Bestellungen nachgetragen wird.
+
 ## Was diese App macht
 
 - Synchronisiert Bestellungen (Webhooks `orders/create`, `orders/updated`,

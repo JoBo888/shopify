@@ -12,6 +12,7 @@ export interface Filters {
   countries?: string[]; // Order.shippingCountryCode values (ISO alpha-2)
   channels?: string[]; // Order.channelName values (Shopify sourceName)
   bundleTitles?: string[]; // only include line items belonging to these bundles
+  tags?: string[]; // Order.tags — order matches if it has ANY of these tags
 }
 
 interface LineItemRow {
@@ -39,6 +40,7 @@ function orderWhere(shop: string, range: DateRange, filters?: Filters) {
     ...(filters?.channels?.length
       ? { channelName: { in: filters.channels } }
       : {}),
+    ...(filters?.tags?.length ? { tags: { hasSome: filters.tags } } : {}),
   };
 }
 
@@ -448,6 +450,22 @@ export async function getAvailableChannels(shop: string): Promise<string[]> {
     .map((r: { channelName: string | null }) => r.channelName)
     .filter((c: string | null): c is string => Boolean(c))
     .sort();
+}
+
+// Prisma has no "distinct array elements" query, so this fetches every
+// order's tags array for the shop and dedupes in JS. Fine at this app's
+// order volume; revisit (e.g. a separate OrderTag join table) if a shop
+// grows into the hundreds of thousands of orders.
+export async function getAvailableTags(shop: string): Promise<string[]> {
+  const rows = await db.order.findMany({
+    where: { shop, tags: { isEmpty: false } },
+    select: { tags: true },
+  });
+  const tagSet = new Set<string>();
+  for (const r of rows) {
+    for (const t of r.tags) tagSet.add(t);
+  }
+  return Array.from(tagSet).sort();
 }
 
 export interface BundleOption {
