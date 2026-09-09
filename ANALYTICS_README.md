@@ -104,6 +104,15 @@ sie tauchen dann nicht in den Länder-/Kanalfiltern auf. Einmalig beheben:
   (netto, retouren-bereinigt), Bestellungen, Ø Bestellwert und
   Umsatzanteil Bundles.
 
+## Neu: Zweite Tabelle für den Vergleichszeitraum
+
+- Unter "Top Produkte & Bundles" gibt es jetzt zwei Tabellen: die erste für
+  den aktuellen Zeitraum (wie bisher), direkt darunter dieselben Spalten
+  (Produkt/Typ/Einheiten/Bestellungen/Umsatz) für den Vergleichszeitraum
+  (Vorjahr oder euer eigener Vergleichszeitraum, falls gesetzt).
+- Beide Tabellen respektieren dieselben aktiven Filter (Land/Kanal/Bundle/
+  Tags/Produkt-Tags).
+
 ## Was diese App macht
 
 - Synchronisiert Bestellungen (Webhooks `orders/create`, `orders/updated`,

@@ -113,7 +113,7 @@ export interface PeriodComparison {
   orderCountChangePct: number | null;
 }
 
-function shiftRangeByOneYear(range: DateRange): DateRange {
+export function shiftRangeByOneYear(range: DateRange): DateRange {
   const from = new Date(range.from);
   const to = new Date(range.to);
   from.setFullYear(from.getFullYear() - 1);

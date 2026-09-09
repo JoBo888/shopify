@@ -40,6 +40,7 @@ import {
   getAvailableTags,
   getAvailableProductTags,
   resolveBundleFilterTitles,
+  shiftRangeByOneYear,
   type Filters,
   type DateRange,
 } from "../models/analytics.server";
@@ -146,11 +147,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const daySpanMs = range.to.getTime() - range.from.getTime();
   const granularity = daySpanMs > 1000 * 60 * 60 * 24 * 120 ? ("month" as const) : ("day" as const);
 
-  const [comparison, timeSeriesData, topItems, bundleSplit, availableCountries, availableChannels, availableBundles, availableTags, availableProductTags] =
+  const [comparison, timeSeriesData, topItems, previousTopItems, bundleSplit, availableCountries, availableChannels, availableBundles, availableTags, availableProductTags] =
     await Promise.all([
       getPeriodComparison(shop, range, filters, compareRange),
       getRevenueTimeSeriesWithComparison(shop, range, granularity, filters, compareRange),
       getTopProductsAndBundles(shop, range, 15, filters),
+      getTopProductsAndBundles(shop, compareRange ?? shiftRangeByOneYear(range), 15, filters),
       getBundleVsStandaloneSplit(shop, range, filters),
       getAvailableCountries(shop),
       getAvailableChannels(shop),
@@ -172,6 +174,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     timeSeries: timeSeriesData.current,
     previousTimeSeries: timeSeriesData.previous,
     topItems,
+    previousTopItems,
     bundleSplit,
     availableCountries,
     availableChannels,
@@ -260,7 +263,7 @@ export default function Index() {
     );
   }
 
-  const { comparison, topItems, bundleSplit, syncState, range, compareRange, filters, selectedBundleKeys } = data;
+  const { comparison, topItems, previousTopItems, bundleSplit, syncState, range, compareRange, filters, selectedBundleKeys } = data;
   const currency = "EUR";
 
   const activeFilterCount =
@@ -271,6 +274,14 @@ export default function Index() {
     (filters.productTags?.length ?? 0);
 
   const productRows = topItems.map((item) => [
+    item.title,
+    item.isBundle ? <Badge tone="info">Bundle</Badge> : <Badge>Einzelprodukt</Badge>,
+    String(item.unitsSold),
+    String(item.orderCount),
+    formatMoney(item.revenue, currency),
+  ]);
+
+  const previousProductRows = previousTopItems.map((item) => [
     item.title,
     item.isBundle ? <Badge tone="info">Bundle</Badge> : <Badge>Einzelprodukt</Badge>,
     String(item.unitsSold),
@@ -586,6 +597,7 @@ export default function Index() {
               <BlockStack gap="400">
                 <Text as="h2" variant="headingMd">
                   {filters.bundleTitles?.length ? "Ausgewählte Bundles" : "Top Produkte & Bundles"}
+                  {" — aktueller Zeitraum"}
                 </Text>
                 {productRows.length === 0 ? (
                   <Text as="p" tone="subdued">Keine Umsätze im gewählten Zeitraum / mit diesen Filtern.</Text>
@@ -594,6 +606,26 @@ export default function Index() {
                     columnContentTypes={["text", "text", "numeric", "numeric", "numeric"]}
                     headings={["Produkt / Bundle", "Typ", "Einheiten", "Bestellungen", "Umsatz"]}
                     rows={productRows}
+                  />
+                )}
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">
+                  {filters.bundleTitles?.length ? "Ausgewählte Bundles" : "Top Produkte & Bundles"}
+                  {` — Vergleichszeitraum (${comparison.previousLabel})`}
+                </Text>
+                {previousProductRows.length === 0 ? (
+                  <Text as="p" tone="subdued">Keine Umsätze im Vergleichszeitraum / mit diesen Filtern.</Text>
+                ) : (
+                  <DataTable
+                    columnContentTypes={["text", "text", "numeric", "numeric", "numeric"]}
+                    headings={["Produkt / Bundle", "Typ", "Einheiten", "Bestellungen", "Umsatz"]}
+                    rows={previousProductRows}
                   />
                 )}
               </BlockStack>
