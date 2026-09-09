@@ -194,6 +194,40 @@ function periodKey(date: Date, granularity: Granularity): string {
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
+// Enumerates every distinct period key between range.from and range.to
+// (inclusive), in order, regardless of whether that period had any orders.
+function enumeratePeriods(range: DateRange, granularity: Granularity): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const cursor = new Date(range.from);
+  cursor.setUTCHours(0, 0, 0, 0);
+  const end = new Date(range.to);
+  while (cursor <= end) {
+    const key = periodKey(cursor, granularity);
+    if (!seen.has(key)) {
+      seen.add(key);
+      keys.push(key);
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return keys;
+}
+
+// Fills gaps (periods with zero orders) with revenue: 0, so a series always
+// has one point per period in the range — required for index-aligned
+// overlays (e.g. current vs. previous-year line charts).
+function fillPeriods(
+  points: TimeSeriesPoint[],
+  range: DateRange,
+  granularity: Granularity,
+): TimeSeriesPoint[] {
+  const byKey = new Map(points.map((p) => [p.periodStart, p.revenue]));
+  return enumeratePeriods(range, granularity).map((periodStart) => ({
+    periodStart,
+    revenue: byKey.get(periodStart) ?? 0,
+  }));
+}
+
 export async function getRevenueTimeSeries(
   shop: string,
   range: DateRange,
@@ -229,6 +263,27 @@ export async function getRevenueTimeSeries(
   return Array.from(buckets.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([periodStart, revenue]) => ({ periodStart, revenue }));
+}
+
+// Current-period series (gap-filled) plus the previous-period series
+// (Vorjahr or custom compareRange), aligned by index so the frontend can
+// zip them straight into one chart-data array with two lines.
+export async function getRevenueTimeSeriesWithComparison(
+  shop: string,
+  range: DateRange,
+  granularity: Granularity,
+  filters?: Filters,
+  compareRange?: DateRange,
+): Promise<{ current: TimeSeriesPoint[]; previous: TimeSeriesPoint[] }> {
+  const previousRange = compareRange ?? shiftRangeByOneYear(range);
+  const [currentRaw, previousRaw] = await Promise.all([
+    getRevenueTimeSeries(shop, range, granularity, filters),
+    getRevenueTimeSeries(shop, previousRange, granularity, filters),
+  ]);
+  return {
+    current: fillPeriods(currentRaw, range, granularity),
+    previous: fillPeriods(previousRaw, previousRange, granularity),
+  };
 }
 
 export interface ProductOrBundleRevenue {

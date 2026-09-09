@@ -25,12 +25,13 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
   CartesianGrid,
 } from "recharts";
 import { authenticate } from "../shopify.server";
 import {
   getPeriodComparison,
-  getRevenueTimeSeries,
+  getRevenueTimeSeriesWithComparison,
   getTopProductsAndBundles,
   getBundleVsStandaloneSplit,
   getAvailableCountries,
@@ -134,10 +135,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const daySpanMs = range.to.getTime() - range.from.getTime();
   const granularity = daySpanMs > 1000 * 60 * 60 * 24 * 120 ? ("month" as const) : ("day" as const);
 
-  const [comparison, timeSeries, topItems, bundleSplit, availableCountries, availableChannels, availableBundles] =
+  const [comparison, timeSeriesData, topItems, bundleSplit, availableCountries, availableChannels, availableBundles] =
     await Promise.all([
       getPeriodComparison(shop, range, filters, compareRange),
-      getRevenueTimeSeries(shop, range, granularity, filters),
+      getRevenueTimeSeriesWithComparison(shop, range, granularity, filters, compareRange),
       getTopProductsAndBundles(shop, range, 15, filters),
       getBundleVsStandaloneSplit(shop, range, filters),
       getAvailableCountries(shop),
@@ -154,7 +155,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       : null,
     filters,
     comparison,
-    timeSeries,
+    timeSeries: timeSeriesData.current,
+    previousTimeSeries: timeSeriesData.previous,
     topItems,
     bundleSplit,
     availableCountries,
@@ -171,13 +173,16 @@ export default function Index() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [customCompare, setCustomCompare] = useState(Boolean(!data.needsBackfill && data.compareRange));
 
+  const previousLabel = data.needsBackfill ? "Vorjahr" : data.comparison.previousLabel;
+
   const chartData = useMemo(() => {
     if (data.needsBackfill) return [];
-    return data.timeSeries.map((p) => ({
+    return data.timeSeries.map((p, i) => ({
       period: p.periodStart,
       Umsatz: Math.round(p.revenue),
+      [previousLabel]: Math.round(data.previousTimeSeries[i]?.revenue ?? 0),
     }));
-  }, [data]);
+  }, [data, previousLabel]);
 
   const applyPreset = (days: number) => {
     const to = new Date();
@@ -518,7 +523,16 @@ export default function Index() {
                       <XAxis dataKey="period" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatMoney(Number(v), currency)} width={90} />
                       <Tooltip formatter={(v: number) => formatMoney(v, currency)} />
+                      <Legend />
                       <Line type="monotone" dataKey="Umsatz" stroke="#008060" strokeWidth={2} dot={false} />
+                      <Line
+                        type="monotone"
+                        dataKey={previousLabel}
+                        stroke="#8C9196"
+                        strokeWidth={2}
+                        strokeDasharray="5 4"
+                        dot={false}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
